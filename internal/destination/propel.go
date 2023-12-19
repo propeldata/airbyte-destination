@@ -12,15 +12,16 @@ import (
 
 const (
 	airbyteExtractedAtColumn = "_airbyte_extracted_at"
+	airbyteRawIdColumn       = "_airbyte_raw_id"
 )
 
 var (
 	defaultAirbyteColumns = []*client.WebhookDataSourceColumnInput{
 		{
-			Name:         "_airbyte_raw_id",
+			Name:         airbyteRawIdColumn,
 			Type:         client.StringPropelType,
 			Nullable:     false,
-			JsonProperty: "_airbyte_raw_id",
+			JsonProperty: airbyteRawIdColumn,
 		},
 		{
 			Name:         airbyteExtractedAtColumn,
@@ -118,6 +119,7 @@ func (p *Propel) Write(dstCfgPath string, configuredCat *airbyte.ConfiguredCatal
 
 	oauthToken, err := p.oauthClient.OAuthToken(context.Background(), dstCfg.ApplicationID, dstCfg.ApplicationSecret)
 	if err != nil {
+		logTracker.Log(airbyte.LogLevelError, fmt.Sprintf("Fetching token %s", err.Error()))
 		return fmt.Errorf("generate an Access Token for Propel failed: %w", err)
 	}
 
@@ -128,6 +130,7 @@ func (p *Propel) Write(dstCfgPath string, configuredCat *airbyte.ConfiguredCatal
 
 		dataSource, err := apiClient.FetchDataSource(ctx, dataSourceUniqueName)
 		if err != nil {
+			logTracker.Log(airbyte.LogLevelError, fmt.Sprintf("Fetching DS %s", err.Error()))
 			if !client.NotFoundError("Data Source", err) {
 				return err
 			}
@@ -156,6 +159,8 @@ func (p *Propel) Write(dstCfgPath string, configuredCat *airbyte.ConfiguredCatal
 
 			columns = append(columns, defaultAirbyteColumns...)
 
+			logTracker.Log(airbyte.LogLevelDebug, fmt.Sprintf("Writing Data Source %s", dataSourceUniqueName))
+
 			dataSource, err = apiClient.CreateDataSource(ctx, client.CreateDataSourceOpts{
 				Name: dataSourceUniqueName,
 				BasicAuth: &client.HttpBasicAuthInput{
@@ -164,14 +169,16 @@ func (p *Propel) Write(dstCfgPath string, configuredCat *airbyte.ConfiguredCatal
 				},
 				Columns:   columns,
 				Timestamp: airbyteExtractedAtColumn,
+				UniqueID:  airbyteRawIdColumn,
 			})
 
 			if err != nil {
+				logTracker.Log(airbyte.LogLevelError, err.Error())
 				return err
 			}
 		}
 
-		fmt.Println(dataSource.ID)
+		logTracker.Log(airbyte.LogLevelDebug, fmt.Sprintf("Data Source created %s", dataSource.ID))
 	}
 
 	return nil
