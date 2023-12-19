@@ -65,8 +65,10 @@ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZN
 github.com/propeldata/fivetran-destination v0.0.0-20231215212647-b72fc41f3c63 h1:dgsY5G6/kUFGYb9pf+ZcQ84Lhy/pgUwgCLBJj7zNKeo=
 github.com/propeldata/fivetran-destination v0.0.0-20231215212647-b72fc41f3c63/go.mod h1:iXMQoi+6qNT8XFF2/iuqjupaS2yPGuBKH8Ob6U0LCdo=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
-github.com/senekis/airbyte v0.0.0-20231218181753-a8acbb102f20 h1:6AkLIK9B3ngK+d/Abyl73ydGvrduFMBaRkzhv/lpUn0=
-github.com/senekis/airbyte v0.0.0-20231218181753-a8acbb102f20/go.mod h1:lJSMcT9Lp4VnHcgOYM8hbafkqUhTZsy56osDqRRGuRE=
+github.com/senekis/airbyte v0.0.0-20231219125107-2859a858ff66 h1:BcMHr0U1Y5t5zelJLScvakdW4vyO+GqwJBFIXHdUCVo=
+github.com/senekis/airbyte v0.0.0-20231219125107-2859a858ff66/go.mod h1:BktycCo/4efyvDC4vz2QV6DXCcSr6eFfvzabR6SxpPA=
+github.com/sethvargo/go-password v0.2.0 h1:BTDl4CC/gjf/axHMaDQtw507ogrXLci6XRiLc7i/UHI=
+github.com/sethvargo/go-password v0.2.0/go.mod h1:Ym4Mr9JXLBycr02MFuVQ/0JHidNetSgbzutTr3zsYXE=
 github.com/spf13/cobra v1.8.0 h1:7aJaZx1B85qltLMc546zn58BxxfZdR/W22ej9CFoEf0=
 github.com/spf13/cobra v1.8.0/go.mod h1:WXLWApfZ71AjXPya3WOlMsY9yMs7YeiHhFVlvLyhcho=
 github.com/spf13/pflag v1.0.5 h1:iy+VFUOCP1a+8yFto/drg2CJ5u0yRoB7fZw3DKv/JXA=

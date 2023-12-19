@@ -5,6 +5,7 @@ go 1.21.3
 require (
 	github.com/bitstrapped/airbyte v0.0.7
 	github.com/propeldata/fivetran-destination v0.0.0-20231215212647-b72fc41f3c63
+	github.com/sethvargo/go-password v0.2.0
 )
 
 require (
@@ -21,4 +22,4 @@ require (
 	nhooyr.io/websocket v1.8.7 // indirect
 )
 
-replace github.com/bitstrapped/airbyte v0.0.7 => github.com/senekis/airbyte v0.0.0-20231218181753-a8acbb102f20
+replace github.com/bitstrapped/airbyte v0.0.7 => github.com/senekis/airbyte v0.0.0-20231219125107-2859a858ff66

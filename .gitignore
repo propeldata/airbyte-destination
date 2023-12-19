@@ -21,3 +21,4 @@ go.work
 .DS_Store
 
 propel-airbyte-destination
+propel-airbyte-destination-arm64
