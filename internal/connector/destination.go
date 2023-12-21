@@ -1,13 +1,16 @@
 package destination
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
+	"time"
 
-	"github.com/bitstrapped/airbyte"
 	"github.com/propeldata/fivetran-destination/pkg/client"
 	"github.com/sethvargo/go-password/password"
+
+	"github.com/propeldata/airbyte-destination/internal/airbyte"
 )
 
 const (
@@ -37,8 +40,6 @@ type Propel struct {
 	webhookClient *client.WebhookClient
 }
 
-var _ airbyte.Destination = &Propel{}
-
 func NewPropel() *Propel {
 	return &Propel{
 		oauthClient:   client.NewOauthClient(),
@@ -46,11 +47,7 @@ func NewPropel() *Propel {
 	}
 }
 
-func (p *Propel) Spec(logTracker airbyte.LogTracker) (*airbyte.ConnectorSpecification, error) {
-	if err := logTracker.Log(airbyte.LogLevelDebug, "Running spec"); err != nil {
-		return nil, err
-	}
-
+func (p *Propel) Spec() *airbyte.ConnectorSpecification {
 	return &airbyte.ConnectorSpecification{
 		DocumentationURL:      "https://propeldata.com/docs",
 		ChangeLogURL:          "https://propeldata.com/docs",
@@ -64,9 +61,9 @@ func (p *Propel) Spec(logTracker airbyte.LogTracker) (*airbyte.ConnectorSpecific
 		ConnectionSpecification: airbyte.ConnectionSpecification{
 			Title:    "Propel Destination Spec",
 			Type:     "object",
-			Required: []airbyte.PropertyName{"application_id", "application_secret"},
+			Required: []string{"application_id", "application_secret"},
 			Properties: airbyte.Properties{
-				Properties: map[airbyte.PropertyName]airbyte.PropertySpec{
+				Properties: map[string]airbyte.PropertySpec{
 					"application_id": {
 						Description: "Propel Application ID",
 						Examples:    []string{"APP00000000000000000000000000"},
@@ -84,7 +81,7 @@ func (p *Propel) Spec(logTracker airbyte.LogTracker) (*airbyte.ConnectorSpecific
 				},
 			},
 		},
-	}, nil
+	}
 }
 
 func (p *Propel) Check(dstCfgPath string, logTracker airbyte.LogTracker) error {
@@ -105,10 +102,10 @@ func (p *Propel) Check(dstCfgPath string, logTracker airbyte.LogTracker) error {
 	return nil
 }
 
-func (p *Propel) Write(dstCfgPath string, configuredCat *airbyte.ConfiguredCatalog, input io.Reader, logTracker airbyte.LogTracker) error {
+func (p *Propel) Write(dstCfgPath string, configuredCat *airbyte.ConfiguredCatalog, input io.Reader, tracker airbyte.MessageTracker) error {
 	ctx := context.Background()
 
-	if err := logTracker.Log(airbyte.LogLevelDebug, "Write records"); err != nil {
+	if err := tracker.Log(airbyte.LogLevelDebug, "Write records"); err != nil {
 		return err
 	}
 
@@ -119,7 +116,7 @@ func (p *Propel) Write(dstCfgPath string, configuredCat *airbyte.ConfiguredCatal
 
 	oauthToken, err := p.oauthClient.OAuthToken(context.Background(), dstCfg.ApplicationID, dstCfg.ApplicationSecret)
 	if err != nil {
-		logTracker.Log(airbyte.LogLevelError, fmt.Sprintf("Fetching token %s", err.Error()))
+		tracker.Log(airbyte.LogLevelError, fmt.Sprintf("Fetching token %s", err.Error()))
 		return fmt.Errorf("generate an Access Token for Propel failed: %w", err)
 	}
 
@@ -130,7 +127,7 @@ func (p *Propel) Write(dstCfgPath string, configuredCat *airbyte.ConfiguredCatal
 
 		dataSource, err := apiClient.FetchDataSource(ctx, dataSourceUniqueName)
 		if err != nil {
-			logTracker.Log(airbyte.LogLevelError, fmt.Sprintf("Fetching DS %s", err.Error()))
+			tracker.Log(airbyte.LogLevelError, fmt.Sprintf("Fetching DS %s", err.Error()))
 			if !client.NotFoundError("Data Source", err) {
 				return err
 			}
@@ -159,7 +156,7 @@ func (p *Propel) Write(dstCfgPath string, configuredCat *airbyte.ConfiguredCatal
 
 			columns = append(columns, defaultAirbyteColumns...)
 
-			logTracker.Log(airbyte.LogLevelDebug, fmt.Sprintf("Writing Data Source %s", dataSourceUniqueName))
+			tracker.Log(airbyte.LogLevelDebug, fmt.Sprintf("Writing Data Source %s", dataSourceUniqueName))
 
 			dataSource, err = apiClient.CreateDataSource(ctx, client.CreateDataSourceOpts{
 				Name: dataSourceUniqueName,
@@ -173,12 +170,25 @@ func (p *Propel) Write(dstCfgPath string, configuredCat *airbyte.ConfiguredCatal
 			})
 
 			if err != nil {
-				logTracker.Log(airbyte.LogLevelError, err.Error())
+				tracker.Log(airbyte.LogLevelError, err.Error())
 				return err
 			}
 		}
 
-		logTracker.Log(airbyte.LogLevelDebug, fmt.Sprintf("Data Source created %s", dataSource.ID))
+		tracker.Log(airbyte.LogLevelDebug, fmt.Sprintf("using Data Source %s", dataSource.ID))
+
+		scanner := bufio.NewScanner(input)
+		for scanner.Scan() {
+			record := scanner.Text()
+
+			tracker.Log(airbyte.LogLevelDebug, fmt.Sprintf("Record received %s", record))
+
+			tracker.State(&LastSyncTime{
+				Stream:    configuredStream.Stream.Name,
+				Timestamp: time.Now().UnixMilli(),
+				Data:      record,
+			})
+		}
 	}
 
 	return nil

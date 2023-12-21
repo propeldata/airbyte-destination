@@ -1,19 +1,18 @@
 package main
 
 import (
-	"log"
 	"os"
 
-	"github.com/bitstrapped/airbyte"
-
-	"github.com/propeldata/airbyte-destination/internal/destination"
+	"github.com/propeldata/airbyte-destination/cmd"
+	"github.com/propeldata/airbyte-destination/internal/airbyte"
 )
 
 func main() {
-	propel := destination.NewPropel()
-	runner := airbyte.NewDestinationRunner(propel, os.Stdin, os.Stdout)
+	rootCmd := cmd.RootCommand()
+	logger := airbyte.NewLogger(rootCmd.OutOrStdout())
 
-	if err := runner.Start(); err != nil {
-		log.Fatal()
+	if err := rootCmd.Execute(); err != nil {
+		logger.Log(airbyte.LogLevelError, err.Error())
+		os.Exit(1)
 	}
 }
