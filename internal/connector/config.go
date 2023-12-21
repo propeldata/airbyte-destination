@@ -1,4 +1,4 @@
-package destination
+package connector
 
 type Config struct {
 	ApplicationID     string `json:"application_id"`

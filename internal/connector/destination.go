@@ -1,12 +1,14 @@
-package destination
+package connector
 
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/propeldata/fivetran-destination/pkg/client"
 	"github.com/sethvargo/go-password/password"
 
@@ -16,6 +18,7 @@ import (
 const (
 	airbyteExtractedAtColumn = "_airbyte_extracted_at"
 	airbyteRawIdColumn       = "_airbyte_raw_id"
+	recordsBatchSize         = 300
 )
 
 var (
@@ -35,19 +38,23 @@ var (
 	}
 )
 
-type Propel struct {
+type Destination struct {
+	logger        airbyte.Logger
 	oauthClient   *client.OauthClient
 	webhookClient *client.WebhookClient
 }
 
-func NewPropel() *Propel {
-	return &Propel{
+func NewDestination(logger airbyte.Logger) *Destination {
+	return &Destination{
+		logger:        logger,
 		oauthClient:   client.NewOauthClient(),
 		webhookClient: client.NewWebhookClient(),
 	}
 }
 
-func (p *Propel) Spec() *airbyte.ConnectorSpecification {
+func (d *Destination) Spec() *airbyte.ConnectorSpecification {
+	d.logger.Log(airbyte.LogLevelDebug, "Running spec")
+
 	return &airbyte.ConnectorSpecification{
 		DocumentationURL:      "https://propeldata.com/docs",
 		ChangeLogURL:          "https://propeldata.com/docs",
@@ -65,6 +72,7 @@ func (p *Propel) Spec() *airbyte.ConnectorSpecification {
 			Properties: airbyte.Properties{
 				Properties: map[string]airbyte.PropertySpec{
 					"application_id": {
+						Title:       "Application ID",
 						Description: "Propel Application ID",
 						Examples:    []string{"APP00000000000000000000000000"},
 						PropertyType: airbyte.PropertyType{
@@ -72,6 +80,7 @@ func (p *Propel) Spec() *airbyte.ConnectorSpecification {
 						},
 					},
 					"application_secret": {
+						Title:       "Application secret",
 						Description: "Propel Application secret",
 						PropertyType: airbyte.PropertyType{
 							Type: airbyte.String,
@@ -84,79 +93,83 @@ func (p *Propel) Spec() *airbyte.ConnectorSpecification {
 	}
 }
 
-func (p *Propel) Check(dstCfgPath string, logTracker airbyte.LogTracker) error {
-	if err := logTracker.Log(airbyte.LogLevelDebug, "Validating API connection"); err != nil {
-		return err
-	}
+func (d *Destination) Check(dstCfgPath string) *airbyte.ConnectionStatus {
+	d.logger.Log(airbyte.LogLevelDebug, "Validating API connection")
 
 	var dstCfg Config
-	if err := airbyte.UnmarshalFromPath(dstCfgPath, &dstCfg); err != nil {
-		return fmt.Errorf("configuration for Propel is invalid, unable to read destination configuration: %w", err)
+	if err := UnmarshalFromPath(dstCfgPath, &dstCfg); err != nil {
+		return &airbyte.ConnectionStatus{
+			Status:  airbyte.CheckStatusFailed,
+			Message: fmt.Sprintf("configuration for Propel is invalid. Unable to read connector configuration: %v", err),
+		}
 	}
 
-	_, err := p.oauthClient.OAuthToken(context.Background(), dstCfg.ApplicationID, dstCfg.ApplicationSecret)
+	_, err := d.oauthClient.OAuthToken(context.Background(), dstCfg.ApplicationID, dstCfg.ApplicationSecret)
 	if err != nil {
-		return fmt.Errorf("generate an Access Token for Propel failed: %w", err)
+		return &airbyte.ConnectionStatus{
+			Status:  airbyte.CheckStatusFailed,
+			Message: fmt.Sprintf("Generate a Propel Access Token failed: %v", err),
+		}
 	}
 
-	return nil
+	return &airbyte.ConnectionStatus{
+		Status:  airbyte.CheckStatusSuccess,
+		Message: "Successfully generated an OAuth token for Propel API",
+	}
 }
 
-func (p *Propel) Write(dstCfgPath string, configuredCat *airbyte.ConfiguredCatalog, input io.Reader, tracker airbyte.MessageTracker) error {
-	ctx := context.Background()
-
-	if err := tracker.Log(airbyte.LogLevelDebug, "Write records"); err != nil {
-		return err
-	}
+func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPath string, input io.Reader) (*airbyte.State, error) {
+	d.logger.Log(airbyte.LogLevelDebug, "Write records")
 
 	var dstCfg Config
-	if err := airbyte.UnmarshalFromPath(dstCfgPath, &dstCfg); err != nil {
-		return fmt.Errorf("configuration for Propel is invalid, unable to read destination configuration: %w", err)
+	if err := UnmarshalFromPath(dstCfgPath, &dstCfg); err != nil {
+		return nil, fmt.Errorf("configuration for Propel is invalid. Unable to read connector configuration: %w", err)
 	}
 
-	oauthToken, err := p.oauthClient.OAuthToken(context.Background(), dstCfg.ApplicationID, dstCfg.ApplicationSecret)
+	var configuredCatalog airbyte.ConfiguredCatalog
+	if err := UnmarshalFromPath(cfgCatalogPath, &configuredCatalog); err != nil {
+		return nil, fmt.Errorf("configured catalog is invalid. Unable to parse it %w", err)
+	}
+
+	oauthToken, err := d.oauthClient.OAuthToken(context.Background(), dstCfg.ApplicationID, dstCfg.ApplicationSecret)
 	if err != nil {
-		tracker.Log(airbyte.LogLevelError, fmt.Sprintf("Fetching token %s", err.Error()))
-		return fmt.Errorf("generate an Access Token for Propel failed: %w", err)
+		return nil, fmt.Errorf("generate an Access token for Propel API failed: %w", err)
 	}
 
 	apiClient := client.NewApiClient(oauthToken.AccessToken)
 
-	for _, configuredStream := range configuredCat.Streams {
+	for _, configuredStream := range configuredCatalog.Streams {
 		dataSourceUniqueName := fmt.Sprintf("%s_%s", configuredStream.Stream.Namespace, configuredStream.Stream.Name)
 
 		dataSource, err := apiClient.FetchDataSource(ctx, dataSourceUniqueName)
 		if err != nil {
-			tracker.Log(airbyte.LogLevelError, fmt.Sprintf("Fetching DS %s", err.Error()))
 			if !client.NotFoundError("Data Source", err) {
-				return err
+				return nil, fmt.Errorf("failed to get Data Source: %w", err)
 			}
 
 			// Generates a password of 18 chars length with 2 digits, 2 symbols and uppercase letters.
 			authPassword, err := password.Generate(18, 2, 2, false, false)
 			if err != nil {
-				return err
+				return nil, fmt.Errorf("failed to generate Basic auth password for Data Source: %w", err)
 			}
 
 			columns := make([]*client.WebhookDataSourceColumnInput, 0, len(configuredStream.Stream.JSONSchema.Properties)+len(defaultAirbyteColumns))
 
-			for name, propertySpec := range configuredStream.Stream.JSONSchema.Properties {
+			for propertyName, propertySpec := range configuredStream.Stream.JSONSchema.Properties {
 				columnType, err := ConvertAirbyteTypeToPropelType(propertySpec.PropertyType)
 				if err != nil {
-					return err
+					return nil, fmt.Errorf("failed to generate Basic auth password for Data Source: %w", err)
 				}
 
 				columns = append(columns, &client.WebhookDataSourceColumnInput{
-					Name:         string(name),
+					Name:         propertyName,
 					Type:         columnType,
 					Nullable:     true,
-					JsonProperty: string(name),
+					JsonProperty: propertyName,
 				})
 			}
 
 			columns = append(columns, defaultAirbyteColumns...)
-
-			tracker.Log(airbyte.LogLevelDebug, fmt.Sprintf("Writing Data Source %s", dataSourceUniqueName))
 
 			dataSource, err = apiClient.CreateDataSource(ctx, client.CreateDataSourceOpts{
 				Name: dataSourceUniqueName,
@@ -170,26 +183,55 @@ func (p *Propel) Write(dstCfgPath string, configuredCat *airbyte.ConfiguredCatal
 			})
 
 			if err != nil {
-				tracker.Log(airbyte.LogLevelError, err.Error())
-				return err
+				return nil, fmt.Errorf("failed to create Data Source %q: %w", dataSourceUniqueName, err)
 			}
 		}
 
-		tracker.Log(airbyte.LogLevelDebug, fmt.Sprintf("using Data Source %s", dataSource.ID))
+		d.logger.Log(airbyte.LogLevelDebug, fmt.Sprintf("Reading data for Data Source %q", dataSource.ID))
+
+		batchedRecords := make([]map[string]any, 0, recordsBatchSize)
+		eventsInput := &client.PostEventsInput{
+			WebhookURL:   dataSource.ConnectionSettings.WebhookConnectionSettings.WebhookURL,
+			AuthUsername: dataSource.ConnectionSettings.WebhookConnectionSettings.BasicAuth.Username,
+			AuthPassword: dataSource.ConnectionSettings.WebhookConnectionSettings.BasicAuth.Password,
+		}
 
 		scanner := bufio.NewScanner(input)
 		for scanner.Scan() {
-			record := scanner.Text()
+			var record airbyte.Record
+			if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
+				return nil, fmt.Errorf("failed to parse Record: %w", err)
+			}
 
-			tracker.Log(airbyte.LogLevelDebug, fmt.Sprintf("Record received %s", record))
+			recordMap := record.Data
+			recordMap[airbyteRawIdColumn] = uuid.New().String()
+			recordMap[airbyteExtractedAtColumn] = record.EmittedAt
 
-			tracker.State(&LastSyncTime{
-				Stream:    configuredStream.Stream.Name,
-				Timestamp: time.Now().UnixMilli(),
-				Data:      record,
-			})
+			if len(batchedRecords) == recordsBatchSize {
+				eventsInput.Events = batchedRecords
+
+				eventErrors, err := d.webhookClient.PostEvents(ctx, eventsInput)
+				if err != nil {
+					d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("failed to publish %d events to %s: %v", recordsBatchSize, dataSource.ConnectionSettings.WebhookConnectionSettings.WebhookURL, err))
+					continue
+				}
+
+				for i, eventError := range eventErrors {
+					if eventError != nil {
+						d.logger.Record(configuredStream.Stream.Namespace, configuredStream.Stream.Name, batchedRecords[i])
+					}
+				}
+
+				batchedRecords = batchedRecords[:0]
+			}
+
+			batchedRecords = append(batchedRecords, recordMap)
 		}
 	}
 
-	return nil
+	return &airbyte.State{
+		Data: map[string]any{
+			"timestamp": time.Now().UnixMilli(),
+		},
+	}, nil
 }
