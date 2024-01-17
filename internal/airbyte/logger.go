@@ -69,7 +69,7 @@ func (l *logger) Record(namespace string, stream string, data map[string]any) {
 	now := time.Now()
 
 	msg := Message{
-		Type: messageTypeRecord,
+		Type: MessageTypeRecord,
 		Record: &Record{
 			Namespace: namespace,
 			Stream:    stream,
@@ -95,7 +95,7 @@ func (l *logger) Flush() {
 
 func (l *logger) State(syncState *State) {
 	l.recordEncoder.Encode(Message{
-		Type:  messageTypeState,
+		Type:  MessageTypeState,
 		State: syncState,
 	})
 }

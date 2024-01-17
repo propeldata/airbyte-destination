@@ -18,13 +18,11 @@ func writeCommand() *cobra.Command {
 			logger := airbyte.NewLogger(cmd.OutOrStdout())
 			destination := connector.NewDestination(logger)
 
-			state, err := destination.Write(cmd.Context(), configPath, catalogPath, cmd.InOrStdin())
+			err := destination.Write(cmd.Context(), configPath, catalogPath, cmd.InOrStdin())
 			if err != nil {
 				logger.Log(airbyte.LogLevelError, err.Error())
 				return err
 			}
-
-			logger.State(state)
 
 			return nil
 		},

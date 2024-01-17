@@ -18,7 +18,7 @@ import (
 const (
 	airbyteExtractedAtColumn = "_airbyte_extracted_at"
 	airbyteRawIdColumn       = "_airbyte_raw_id"
-	recordsBatchSize         = 300
+	maxRecordsBatchSize      = 300
 )
 
 var (
@@ -118,22 +118,22 @@ func (d *Destination) Check(dstCfgPath string) *airbyte.ConnectionStatus {
 	}
 }
 
-func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPath string, input io.Reader) (*airbyte.State, error) {
+func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPath string, input io.Reader) error {
 	d.logger.Log(airbyte.LogLevelDebug, "Write records")
 
 	var dstCfg Config
 	if err := UnmarshalFromPath(dstCfgPath, &dstCfg); err != nil {
-		return nil, fmt.Errorf("configuration for Propel is invalid. Unable to read connector configuration: %w", err)
+		return fmt.Errorf("configuration for Propel is invalid. Unable to read connector configuration: %w", err)
 	}
 
 	var configuredCatalog airbyte.ConfiguredCatalog
 	if err := UnmarshalFromPath(cfgCatalogPath, &configuredCatalog); err != nil {
-		return nil, fmt.Errorf("configured catalog is invalid. Unable to parse it %w", err)
+		return fmt.Errorf("configured catalog is invalid. Unable to parse it %w", err)
 	}
 
 	oauthToken, err := d.oauthClient.OAuthToken(context.Background(), dstCfg.ApplicationID, dstCfg.ApplicationSecret)
 	if err != nil {
-		return nil, fmt.Errorf("generate an Access token for Propel API failed: %w", err)
+		return fmt.Errorf("generate an Access token for Propel API failed: %w", err)
 	}
 
 	apiClient := client.NewApiClient(oauthToken.AccessToken)
@@ -144,13 +144,13 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 		dataSource, err := apiClient.FetchDataSource(ctx, dataSourceUniqueName)
 		if err != nil {
 			if !client.NotFoundError("Data Source", err) {
-				return nil, fmt.Errorf("failed to get Data Source: %w", err)
+				return fmt.Errorf("failed to get Data Source: %w", err)
 			}
 
 			// Generates a password of 18 chars length with 2 digits, 2 symbols and uppercase letters.
 			authPassword, err := password.Generate(18, 2, 2, false, false)
 			if err != nil {
-				return nil, fmt.Errorf("failed to generate Basic auth password for Data Source: %w", err)
+				return fmt.Errorf("failed to generate Basic auth password for Data Source: %w", err)
 			}
 
 			columns := make([]*client.WebhookDataSourceColumnInput, 0, len(configuredStream.Stream.JSONSchema.Properties)+len(defaultAirbyteColumns))
@@ -158,7 +158,7 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 			for propertyName, propertySpec := range configuredStream.Stream.JSONSchema.Properties {
 				columnType, err := ConvertAirbyteTypeToPropelType(propertySpec.PropertyType)
 				if err != nil {
-					return nil, fmt.Errorf("failed to generate Basic auth password for Data Source: %w", err)
+					return fmt.Errorf("failed to generate Basic auth password for Data Source: %w", err)
 				}
 
 				columns = append(columns, &client.WebhookDataSourceColumnInput{
@@ -181,15 +181,33 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 				Timestamp: airbyteExtractedAtColumn,
 				UniqueID:  airbyteRawIdColumn,
 			})
-
 			if err != nil {
-				return nil, fmt.Errorf("failed to create Data Source %q: %w", dataSourceUniqueName, err)
+				return fmt.Errorf("failed to create Data Source %q: %w", dataSourceUniqueName, err)
+			}
+
+			waitForStateOps := stateChangeOps[client.DataSource]{
+				pending: []string{"CREATED", "CONNECTING"},
+				target:  []string{"CONNECTED"},
+				refresh: func() (*client.DataSource, string, error) {
+					resp, err := apiClient.FetchDataSource(ctx, dataSourceUniqueName)
+					if err != nil {
+						return nil, "", fmt.Errorf("failed to check the status of table %q: %w", dataSourceUniqueName, err)
+					}
+
+					return resp, resp.Status, nil
+				},
+				timeout: 3 * time.Minute,
+				delay:   3 * time.Second,
+			}
+
+			if _, err = waitForState(waitForStateOps); err != nil {
+				return err
 			}
 		}
 
 		d.logger.Log(airbyte.LogLevelDebug, fmt.Sprintf("Reading data for Data Source %q", dataSource.ID))
 
-		batchedRecords := make([]map[string]any, 0, recordsBatchSize)
+		batchedRecords := make([]map[string]any, 0, maxRecordsBatchSize)
 		eventsInput := &client.PostEventsInput{
 			WebhookURL:   dataSource.ConnectionSettings.WebhookConnectionSettings.WebhookURL,
 			AuthUsername: dataSource.ConnectionSettings.WebhookConnectionSettings.BasicAuth.Username,
@@ -198,40 +216,63 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 
 		scanner := bufio.NewScanner(input)
 		for scanner.Scan() {
-			var record airbyte.Record
-			if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
-				return nil, fmt.Errorf("failed to parse Record: %w", err)
+			var airbyteMessage airbyte.Message
+			if err := json.Unmarshal(scanner.Bytes(), &airbyteMessage); err != nil {
+				return fmt.Errorf("failed to parse Record: %w", err)
 			}
 
-			recordMap := record.Data
-			recordMap[airbyteRawIdColumn] = uuid.New().String()
-			recordMap[airbyteExtractedAtColumn] = record.EmittedAt
-
-			if len(batchedRecords) == recordsBatchSize {
-				eventsInput.Events = batchedRecords
-
-				eventErrors, err := d.webhookClient.PostEvents(ctx, eventsInput)
-				if err != nil {
-					d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("failed to publish %d events to %s: %v", recordsBatchSize, dataSource.ConnectionSettings.WebhookConnectionSettings.WebhookURL, err))
+			switch airbyteMessage.Type {
+			case airbyte.MessageTypeState:
+				if err = d.publishBatch(ctx, dataSource, configuredStream, eventsInput, batchedRecords); err != nil {
 					continue
 				}
 
-				for i, eventError := range eventErrors {
-					if eventError != nil {
-						d.logger.Record(configuredStream.Stream.Namespace, configuredStream.Stream.Name, batchedRecords[i])
+				batchedRecords = batchedRecords[:0]
+				d.logger.State(airbyteMessage.State)
+
+			case airbyte.MessageTypeRecord:
+				recordMap := airbyteMessage.Record.Data
+				recordMap[airbyteRawIdColumn] = uuid.New().String()
+				recordMap[airbyteExtractedAtColumn] = airbyteMessage.Record.EmittedAt
+
+				if len(batchedRecords) == maxRecordsBatchSize {
+					if err = d.publishBatch(ctx, dataSource, configuredStream, eventsInput, batchedRecords); err != nil {
+						return err
 					}
+
+					batchedRecords = batchedRecords[:0]
 				}
 
-				batchedRecords = batchedRecords[:0]
+				batchedRecords = append(batchedRecords, recordMap)
 			}
+		}
 
-			batchedRecords = append(batchedRecords, recordMap)
+		if err = d.publishBatch(ctx, dataSource, configuredStream, eventsInput, batchedRecords); err != nil {
+			return err
 		}
 	}
 
-	return &airbyte.State{
-		Data: map[string]any{
-			"timestamp": time.Now().UnixMilli(),
-		},
-	}, nil
+	return nil
+}
+
+func (d *Destination) publishBatch(ctx context.Context, dataSource *client.DataSource, configuredStream airbyte.ConfiguredStream, eventsInput *client.PostEventsInput, events []map[string]any) error {
+	if len(events) == 0 {
+		return nil
+	}
+
+	eventsInput.Events = events
+
+	eventErrors, err := d.webhookClient.PostEvents(ctx, eventsInput)
+	if err != nil {
+		d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("failed to publish %d events to %s: %v", len(events), dataSource.ConnectionSettings.WebhookConnectionSettings.WebhookURL, err))
+		return err
+	}
+
+	for _, eventError := range eventErrors {
+		if eventError != nil {
+			d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("failed to store stream %s: %v", configuredStream.Stream.Name, eventError))
+		}
+	}
+
+	return nil
 }

@@ -5,8 +5,8 @@ package airbyte
 type messageType string
 
 const (
-	messageTypeRecord           messageType = "RECORD"
-	messageTypeState            messageType = "STATE"
+	MessageTypeRecord           messageType = "RECORD"
+	MessageTypeState            messageType = "STATE"
 	messageTypeLog              messageType = "LOG"
 	messageTypeSpec             messageType = "SPEC"
 	messageTypeConnectionStatus messageType = "CONNECTION_STATUS"
@@ -84,9 +84,20 @@ type ConnectionStatus struct {
 	Message string      `json:"message,omitempty"`
 }
 
+type StateType string
+
+const (
+	StateTypeStream StateType = "STREAM"
+	StateTypeGlobal StateType = "GLOBAL"
+	StateTypeLegacy StateType = "LEGACY"
+)
+
 // State is used to store data between syncs - useful for incremental syncs and state storage
 type State struct {
-	Data any `json:"data"`
+	Type   StateType      `json:"state_type"`
+	Data   any            `json:"data"`
+	Stream map[string]any `json:"stream"`
+	Global map[string]any `json:"global"`
 }
 
 // SyncMode defines the modes that your source is able to sync in
