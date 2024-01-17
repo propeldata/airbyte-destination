@@ -20,5 +20,7 @@ go.work
 .idea
 .DS_Store
 
+secrets/*
+
 propel-airbyte-destination
 propel-airbyte-destination-arm64
