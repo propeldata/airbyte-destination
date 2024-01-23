@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/propeldata/fivetran-destination/pkg/client"
+	"github.com/propeldata/go-client"
+	"github.com/propeldata/go-client/models"
 	"github.com/sethvargo/go-password/password"
 
 	"github.com/propeldata/airbyte-destination/internal/airbyte"
@@ -22,16 +23,16 @@ const (
 )
 
 var (
-	defaultAirbyteColumns = []*client.WebhookDataSourceColumnInput{
+	defaultAirbyteColumns = []*models.WebhookDataSourceColumnInput{
 		{
 			Name:         airbyteRawIdColumn,
-			Type:         client.StringPropelType,
+			Type:         models.StringPropelType,
 			Nullable:     false,
 			JsonProperty: airbyteRawIdColumn,
 		},
 		{
 			Name:         airbyteExtractedAtColumn,
-			Type:         client.TimestampPropelType,
+			Type:         models.TimestampPropelType,
 			Nullable:     false,
 			JsonProperty: airbyteExtractedAtColumn,
 		},
@@ -153,7 +154,7 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 				return fmt.Errorf("failed to generate Basic auth password for Data Source: %w", err)
 			}
 
-			columns := make([]*client.WebhookDataSourceColumnInput, 0, len(configuredStream.Stream.JSONSchema.Properties)+len(defaultAirbyteColumns))
+			columns := make([]*models.WebhookDataSourceColumnInput, 0, len(configuredStream.Stream.JSONSchema.Properties)+len(defaultAirbyteColumns))
 
 			for propertyName, propertySpec := range configuredStream.Stream.JSONSchema.Properties {
 				columnType, err := ConvertAirbyteTypeToPropelType(propertySpec.PropertyType)
@@ -161,7 +162,7 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 					return fmt.Errorf("failed to generate Basic auth password for Data Source: %w", err)
 				}
 
-				columns = append(columns, &client.WebhookDataSourceColumnInput{
+				columns = append(columns, &models.WebhookDataSourceColumnInput{
 					Name:         propertyName,
 					Type:         columnType,
 					Nullable:     true,
@@ -173,7 +174,7 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 
 			dataSource, err = apiClient.CreateDataSource(ctx, client.CreateDataSourceOpts{
 				Name: dataSourceUniqueName,
-				BasicAuth: &client.HttpBasicAuthInput{
+				BasicAuth: &models.HttpBasicAuthInput{
 					Username: configuredStream.Stream.Namespace,
 					Password: authPassword,
 				},
@@ -185,10 +186,10 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 				return fmt.Errorf("failed to create Data Source %q: %w", dataSourceUniqueName, err)
 			}
 
-			waitForStateOps := stateChangeOps[client.DataSource]{
+			waitForStateOps := stateChangeOps[models.DataSource]{
 				pending: []string{"CREATED", "CONNECTING"},
 				target:  []string{"CONNECTED"},
-				refresh: func() (*client.DataSource, string, error) {
+				refresh: func() (*models.DataSource, string, error) {
 					resp, err := apiClient.FetchDataSource(ctx, dataSourceUniqueName)
 					if err != nil {
 						return nil, "", fmt.Errorf("failed to check the status of table %q: %w", dataSourceUniqueName, err)
@@ -255,7 +256,7 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 	return nil
 }
 
-func (d *Destination) publishBatch(ctx context.Context, dataSource *client.DataSource, configuredStream airbyte.ConfiguredStream, eventsInput *client.PostEventsInput, events []map[string]any) error {
+func (d *Destination) publishBatch(ctx context.Context, dataSource *models.DataSource, configuredStream airbyte.ConfiguredStream, eventsInput *client.PostEventsInput, events []map[string]any) error {
 	if len(events) == 0 {
 		return nil
 	}

@@ -3,42 +3,42 @@ package connector
 import (
 	"fmt"
 
-	"github.com/propeldata/fivetran-destination/pkg/client"
+	"github.com/propeldata/go-client/models"
 
 	"github.com/propeldata/airbyte-destination/internal/airbyte"
 )
 
 // TODO: Missing to handle the oneOf
-func ConvertAirbyteTypeToPropelType(airbytePropery airbyte.PropertyType) (client.PropelType, error) {
-	var propelType client.PropelType
+func ConvertAirbyteTypeToPropelType(airbytePropery airbyte.PropertyType) (models.PropelType, error) {
+	var propelType models.PropelType
 
 	switch airbytePropery.Type {
 	case airbyte.String:
 		switch airbytePropery.Format {
 		case airbyte.Date:
-			propelType = client.DatePropelType
+			propelType = models.DatePropelType
 		case airbyte.DateTime:
 			switch airbytePropery.AirbyteType {
 			case airbyte.TimestampWOTZ:
-				propelType = client.StringPropelType
+				propelType = models.StringPropelType
 			default:
-				propelType = client.TimestampPropelType
+				propelType = models.TimestampPropelType
 			}
 		case airbyte.Time:
-			propelType = client.StringPropelType
+			propelType = models.StringPropelType
 		}
 
-		propelType = client.StringPropelType
+		propelType = models.StringPropelType
 	case airbyte.Boolean:
-		propelType = client.BooleanPropelType
+		propelType = models.BooleanPropelType
 	case airbyte.Number:
-		propelType = client.DoublePropelType
+		propelType = models.DoublePropelType
 	case airbyte.Integer:
-		propelType = client.Int64PropelType
+		propelType = models.Int64PropelType
 	case airbyte.Object, airbyte.Array:
-		propelType = client.JsonPropelType
+		propelType = models.JsonPropelType
 	default:
-		return client.PropelType{}, fmt.Errorf("Airbyte type %s:%s:%s not supported", airbytePropery.Type, airbytePropery.Format, airbytePropery.AirbyteType)
+		return models.PropelType{}, fmt.Errorf("Airbyte type %s:%s:%s not supported", airbytePropery.Type, airbytePropery.Format, airbytePropery.AirbyteType)
 	}
 
 	return propelType, nil
