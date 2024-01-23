@@ -186,10 +186,10 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 				return fmt.Errorf("failed to create Data Source %q: %w", dataSourceUniqueName, err)
 			}
 
-			waitForStateOps := stateChangeOps[models.DataSource]{
-				pending: []string{"CREATED", "CONNECTING"},
-				target:  []string{"CONNECTED"},
-				refresh: func() (*models.DataSource, string, error) {
+			waitForStateOps := client.StateChangeOps[models.DataSource]{
+				Pending: []string{"CREATED", "CONNECTING"},
+				Target:  []string{"CONNECTED"},
+				Refresh: func() (*models.DataSource, string, error) {
 					resp, err := apiClient.FetchDataSource(ctx, dataSourceUniqueName)
 					if err != nil {
 						return nil, "", fmt.Errorf("failed to check the status of table %q: %w", dataSourceUniqueName, err)
@@ -197,11 +197,11 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 
 					return resp, resp.Status, nil
 				},
-				timeout: 3 * time.Minute,
-				delay:   3 * time.Second,
+				Timeout: 3 * time.Minute,
+				Delay:   3 * time.Second,
 			}
 
-			if _, err = waitForState(waitForStateOps); err != nil {
+			if _, err = client.WaitForState(waitForStateOps); err != nil {
 				return err
 			}
 		}
