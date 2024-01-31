@@ -48,7 +48,7 @@ jobs:
         run: docker build . -t airbyte/destination-propel:dev
 
       - name: Run spec command
-        run: ./propel-airbyte-destination spec
+        run: docker run --rm airbyte/destination-propel:dev spec
 
         #  - name: Generate configuration file with credentials
       # run: make secrets APP_ID=${{ vars.PROPEL_E2E_CLIENT_ID }} SECRET=${{ secrets.PROPEL_E2E_CLIENT_SECRET }}
