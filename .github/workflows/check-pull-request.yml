@@ -33,3 +33,32 @@ jobs:
         # taken from https://golangci-lint.run/usage/install/
       - name: Lint
         run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.54.2
+
+  run-integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Build Docker
+        run: docker build . -t airbyte/destination-propel:dev
+
+      - name: Run spec command
+        run: ./propel-airbyte-destination spec
+
+        #  - name: Generate configuration file with credentials
+      # run: make secrets APP_ID=${{ vars.PROPEL_E2E_CLIENT_ID }} SECRET=${{ secrets.PROPEL_E2E_CLIENT_SECRET }}
+
+        #   - name: Run check command
+      #     run: docker run -v $(pwd)/secrets:/secrets --rm airbyte/destination-propel check --config /secrets/config.json
+
+     # - name: Run write command
+     #   run: ./propel-airbyte-destination
+
+     # - name: Assert tester
+     #   run: make e2e-tests
+
