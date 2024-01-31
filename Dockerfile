@@ -4,20 +4,16 @@ WORKDIR /base
 
 COPY . .
 
-RUN apk --no-cache add make
-RUN apk --no-cache add git
+RUN apk --no-cache add make git
 
 RUN make build
 
-FROM alpine:3.19
+FROM --platform=linux/amd64 amd64/alpine:3.19 AS runner
 
-WORKDIR /base
-
-COPY --from=builder /base/propel-airbyte-destination-arm64 /base/
-
-RUN chmod 755 /base/propel-airbyte-destination-arm64
+COPY --from=builder /base/propel-airbyte-destination ./
+RUN chmod 755 ./propel-airbyte-destination
 
 LABEL io.airbyte.version=0.0.1
 LABEL io.airbyte.name=airbyte/destination-propel
 
-ENTRYPOINT ["/base/propel-airbyte-destination-arm64"]
+ENTRYPOINT ["./propel-airbyte-destination"]

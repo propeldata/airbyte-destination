@@ -50,11 +50,11 @@ jobs:
       - name: Run spec command
         run: docker run --rm airbyte/destination-propel:dev spec
 
-        #  - name: Generate configuration file with credentials
-      # run: make secrets APP_ID=${{ vars.PROPEL_E2E_CLIENT_ID }} SECRET=${{ secrets.PROPEL_E2E_CLIENT_SECRET }}
+      - name: Generate configuration file with credentials
+        run: make secrets APP_ID=${{ vars.PROPEL_E2E_CLIENT_ID }} SECRET=${{ secrets.PROPEL_E2E_CLIENT_SECRET }}
 
-        #   - name: Run check command
-      #     run: docker run -v $(pwd)/secrets:/secrets --rm airbyte/destination-propel check --config /secrets/config.json
+      - name: Run check command
+        run: docker run -v $(pwd)/secrets:/secrets --rm airbyte/destination-propel check --config /secrets/config.json
 
      # - name: Run write command
      #   run: ./propel-airbyte-destination
