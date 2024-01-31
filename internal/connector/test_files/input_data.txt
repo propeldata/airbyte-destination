@@ -1,0 +1,60 @@
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379796, "data": {"id": 23,"name": "viva colombia"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379795, "data": {"id": 500,"name": "air canada"}}}
+{"type": "STATE", "state": {"state_type": "STREAM", "stream": {"stream_descriptor": {"name":"airlines state 1"}}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379710, "data": {"id": 2,"name": "delta"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379711, "data": {"id": 3,"name": "united"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379712, "data": {"id": 4,"name": "american"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379713, "data": {"id": 5,"name": "lufthansa"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379714, "data": {"id": 6,"name": "qatar"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379715, "data": {"id": 7,"name": "emirates"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379716, "data": {"id": 8,"name": "air canada"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379717, "data": {"id": 9,"name": "british airways"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379718, "data": {"id": 10,"name": "southwest"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379719, "data": {"id": 11,"name": "jetblue"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379720, "data": {"id": 12,"name": "air france"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379721, "data": {"id": 13,"name": "virgin atlantic"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379722, "data": {"id": 14,"name": "alitalia"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379723, "data": {"id": 15,"name": "cathay pacific"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379724, "data": {"id": 16,"name": "ana"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379725, "data": {"id": 17,"name": "ethiopian"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379726, "data": {"id": 18,"name": "swiss"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379727, "data": {"id": 19,"name": "saudia"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379728, "data": {"id": 20,"name": "qantas"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379729, "data": {"id": 21,"name": "singapore airlines"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379730, "data": {"id": 22,"name": "turkish airlines"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379731, "data": {"id": 23,"name": "air india"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379732, "data": {"id": 24,"name": "korean air"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379733, "data": {"id": 25,"name": "etihad"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379734, "data": {"id": 26,"name": "malaysia airlines"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379735, "data": {"id": 27,"name": "air new zealand"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379736, "data": {"id": 28,"name": "vietnam airlines"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379737, "data": {"id": 29,"name": "alaska airlines"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379738, "data": {"id": 30,"name": "cathay dragon"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379739, "data": {"id": 31,"name": "oman air"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379740, "data": {"id": 32,"name": "air asia"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379741, "data": {"id": 33,"name": "egyptair"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379742, "data": {"id": 34,"name": "finnair"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379743, "data": {"id": 35,"name": "air astana"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379744, "data": {"id": 36,"name": "iberia"}}}
+{"type": "STATE", "state": {"state_type": "STREAM", "stream": {"stream_descriptor": {"name":"airlines state 2"}}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379745, "data": {"id": 37,"name": "sri lankan airlines"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379746, "data": {"id": 38,"name": "el al"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379747, "data": {"id": 39,"name": "tap air portugal"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379748, "data": {"id": 40,"name": "ethiad airways"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379749, "data": {"id": 41,"name": "kulula"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379750, "data": {"id": 42,"name": "air mauritius"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379751, "data": {"id": 43,"name": "allegiant air"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379752, "data": {"id": 44,"name": "avianca"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379753, "data": {"id": 45,"name": "bangkok airways"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379754, "data": {"id": 46,"name": "air algerie"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379755, "data": {"id": 47,"name": "norwegian"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379756, "data": {"id": 48,"name": "sas"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379757, "data": {"id": 49,"name": "air baltic"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379758, "data": {"id": 50,"name": "hawaiian airlines"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379714, "data": {"id": 456,"name": "delta"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379713, "data": {"id": 400,"name": "american airlines"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379712, "data": {"id": 600,"name": "qatar airways"}}}
+{"type": "STATE", "state": {"state_type": "STREAM", "stream": {"stream_descriptor": {"name":"airlines state 3"}}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379791, "data": {"id": 450,"name": "latam"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379790, "data": {"id": 560,"name": "vivaerobus"}}}
+{"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379709, "data": {"id": 100,"name": "aeromexico"}}}

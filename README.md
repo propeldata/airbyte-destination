@@ -32,9 +32,9 @@ docker run -v $(pwd)/secrets:/secrets --rm airbyte/destination-propel check --co
 ### Write
 If you haven't already, set up the secrets config file as described in the command above.
 To test the `write` command you should pass down:
-- The config file previously generated
-- A configured catalog, which describes an Airbyte Stream
-- Record and State messages via stdin
+- The config file previously generated.
+- A configured catalog. It describes an Airbyte Stream, which is a Data Pool on our side.
+- Record and State messages via stdin. These are the records that will be inserted to the Data Pool.
 
 Samples of the last two can be found in `sample_files/` and can be used as such:
 ```shell
