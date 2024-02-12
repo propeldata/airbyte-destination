@@ -19,5 +19,5 @@ secrets:
 test:
 	go test -v ./internal/...
 
-e2e:
+test-e2e:
 	go test -v ./e2e/...
