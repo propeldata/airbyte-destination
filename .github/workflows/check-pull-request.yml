@@ -61,16 +61,3 @@ jobs:
 
       - name: Assert tester
         run: make test-e2e
-
-  publish-docker:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Publish to Registry
-        uses: elgohr/Publish-Docker-Github-Action@v5
-        with:
-          name: propeldata/airbyte-propel-destination
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
