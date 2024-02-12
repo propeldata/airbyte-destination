@@ -3,7 +3,6 @@ package e2e
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -29,13 +28,11 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatalf("read configuration file failed: %v", err)
 	}
-	fmt.Println(string(data))
+
 	err = json.Unmarshal(data, &config)
 	if err != nil {
 		log.Fatalf("unmarshal failed: %v", err)
 	}
-
-	fmt.Println(config)
 
 	code := m.Run()
 
@@ -49,8 +46,7 @@ func TestWrite(t *testing.T) {
 
 	ctx := context.Background()
 	oauthClient := client.NewOauthClient()
-	fmt.Println(config.AppSecret)
-	fmt.Println(config.AppId)
+
 	oauthToken, err := oauthClient.OAuthToken(ctx, config.AppId, config.AppSecret)
 	c.NoError(err)
 
