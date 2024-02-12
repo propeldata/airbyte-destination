@@ -11,12 +11,12 @@ make
 ```
 
 ```shell
-docker build . -t airbyte/destination-propel
+docker build . -t propeldata/airbyte-destination
 ```
 
 ### Spec
 ```shell
-docker run --rm airbyte/destination-propel spec
+docker run --rm propeldata/airbyte-destination spec
 ```
 
 ### Check
@@ -26,7 +26,7 @@ make secrets APP_ID=<Application ID> SECRET=<Application secret>
 ```
 Now with the `secrets/config.json` file all set up you can run:
 ```shell
-docker run -v $(pwd)/secrets:/secrets --rm airbyte/destination-propel check --config /secrets/config.json
+docker run -v $(pwd)/secrets:/secrets --rm propeldata/airbyte-destination check --config /secrets/config.json
 ```
 
 ### Write
@@ -38,5 +38,5 @@ To test the `write` command you should pass down:
 
 Samples of the last two can be found in `sample_files/` and can be used as such:
 ```shell
-docker run --rm -i -v $(pwd)/secrets:/secrets -v $(pwd)/sample_files:/sample_files airbyte/destination-propel write --config /secrets/config.json --catalog /sample_files/configured_catalog.json < sample_files/input_data.txt
+docker run --rm -i -v $(pwd)/secrets:/secrets -v $(pwd)/sample_files:/sample_files propeldata/airbyte-destination write --config /secrets/config.json --catalog /sample_files/configured_catalog.json < sample_files/input_data.txt
 ```

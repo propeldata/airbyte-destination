@@ -4,7 +4,7 @@ go 1.21.3
 
 require (
 	github.com/google/uuid v1.5.0
-	github.com/propeldata/go-client v0.0.0-20240206195329-6429118ee9c3
+	github.com/propeldata/go-client v0.0.0-20240212132900-b257c0be6b3f
 	github.com/sethvargo/go-password v0.2.0
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.2.2

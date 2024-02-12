@@ -56,16 +56,22 @@ func TestWrite(t *testing.T) {
 	c.NoError(err)
 	c.Len(dataSource.ConnectionSettings.WebhookConnectionSettings.Columns, 4)
 
-	newRecords := []string{"1", "2", "3", "4", "5", "6", "7", "8"}
-
-	_, err = client.WaitForState(client.StateChangeOps[models.RecordsByUniqueIdResponse]{
+	_, err = client.WaitForState(client.StateChangeOps[models.DataGridResponse]{
 		Pending: []string{"0", "1", "2", "3", "4", "5", "6", "7"},
 		Target:  []string{"8"},
-		Refresh: func() (*models.RecordsByUniqueIdResponse, string, error) {
-			records, err := apiClient.FetchRecordsByUniqueId(ctx, dataSource.UniqueName, newRecords, []string{"id", "name"})
+		Refresh: func() (*models.DataGridResponse, string, error) {
+			dataGrid, err := apiClient.FetchDataGrid(ctx, models.DataGridInput{
+				DataPool: models.DataPoolInput{Name: dataSourceUniqueName},
+				Columns:  []string{"id", "name"},
+				TimeRange: models.TimeRangeInput{
+					Relative: "LAST_N_DAYS",
+					N:        365,
+					Start:    time.Unix(1705379000, 0),
+					Stop:     time.Unix(1705379000, 0),
+				}})
 			c.NoError(err)
 
-			return records, strconv.Itoa(len(records.Values)), nil
+			return dataGrid, strconv.Itoa(len(dataGrid.Rows)), nil
 		},
 		Timeout: 5 * time.Minute,
 		Delay:   30 * time.Second,
