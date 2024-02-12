@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -15,8 +16,8 @@ import (
 )
 
 type Config struct {
-	AppId     string `json:"clientId"`
-	AppSecret string `json:"clientSecret"`
+	AppId     string `json:"application_id"`
+	AppSecret string `json:"application_secret"`
 }
 
 const dataSourceUniqueName = "_airbyte_airlines"
@@ -28,11 +29,13 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		log.Fatalf("read configuration file failed: %v", err)
 	}
-
+	fmt.Println(string(data))
 	err = json.Unmarshal(data, &config)
 	if err != nil {
 		log.Fatalf("unmarshal failed: %v", err)
 	}
+
+	fmt.Println(config)
 
 	code := m.Run()
 
@@ -46,7 +49,8 @@ func TestWrite(t *testing.T) {
 
 	ctx := context.Background()
 	oauthClient := client.NewOauthClient()
-
+	fmt.Println(config.AppSecret)
+	fmt.Println(config.AppId)
 	oauthToken, err := oauthClient.OAuthToken(ctx, config.AppId, config.AppSecret)
 	c.NoError(err)
 
@@ -62,7 +66,7 @@ func TestWrite(t *testing.T) {
 		Pending: []string{"0", "1", "2", "3", "4", "5", "6", "7"},
 		Target:  []string{"8"},
 		Refresh: func() (*models.RecordsByUniqueIdResponse, string, error) {
-			records, err := apiClient.FetchRecordsByUniqueId(ctx, dataSource.UniqueName, newRecords, []string{"id", "desc"})
+			records, err := apiClient.FetchRecordsByUniqueId(ctx, dataSource.UniqueName, newRecords, []string{"id", "name"})
 			c.NoError(err)
 
 			return records, strconv.Itoa(len(records.Values)), nil
