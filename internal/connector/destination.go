@@ -75,8 +75,6 @@ func newApiClient(accessToken string) PropelApiClient {
 }
 
 func (d *Destination) Spec() *airbyte.ConnectorSpecification {
-	d.logger.Log(airbyte.LogLevelDebug, "Running spec")
-
 	return &airbyte.ConnectorSpecification{
 		DocumentationURL:      "https://propeldata.com/docs",
 		ChangeLogURL:          "https://propeldata.com/docs",

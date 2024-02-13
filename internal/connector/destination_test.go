@@ -23,15 +23,11 @@ const (
 
 func TestDestination_Spec(t *testing.T) {
 	c := require.New(t)
-	stdoutBuffer := bytes.NewBufferString("")
-	d := NewMockDestination(airbyte.NewLogger(stdoutBuffer))
+	d := NewMockDestination(airbyte.NewLogger(bytes.NewBufferString("")))
 
 	spec := d.Spec()
 	c.Equal("https://propeldata.com/docs", spec.DocumentationURL)
 	c.Equal([]airbyte.DestinationSyncMode{"overwrite", "append"}, spec.SupportedDestinationSyncModes)
-
-	output := stdoutBuffer.String()
-	c.Contains(output, `"level":"DEBUG","message":"Running spec"`)
 }
 
 func TestDestination_Check(t *testing.T) {
