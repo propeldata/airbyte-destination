@@ -18,4 +18,5 @@ RUN chmod 755 ./propel-airbyte-destination
 LABEL io.airbyte.version=0.0.1
 LABEL io.airbyte.name=airbyte/destination-propel
 
+ENV AIRBYTE_ENTRYPOINT "./propel-airbyte-destination"
 ENTRYPOINT ["./propel-airbyte-destination"]
