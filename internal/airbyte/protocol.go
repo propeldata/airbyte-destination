@@ -165,7 +165,7 @@ func (pt *PropTypes) UnmarshalJSON(data []byte) error {
 
 	var arr []string
 	if err := json.Unmarshal(data, &arr); err == nil {
-		pt.Types = make([]PropType, 0, len(arr))
+		pt.Types = make([]PropType, len(arr))
 		for i, propType := range arr {
 			pt.Types[i] = PropType(propType)
 		}
