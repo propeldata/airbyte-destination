@@ -40,3 +40,10 @@ Samples of the last two can be found in `sample_files/` and can be used as such:
 ```shell
 docker run --rm -i -v $(pwd)/secrets:/secrets -v $(pwd)/sample_files:/sample_files propeldata/airbyte-destination write --config /secrets/config.json --catalog /sample_files/configured_catalog.json < sample_files/input_data.txt
 ```
+
+## Integration tests
+All three commands are run for integration tests, using our e2e Production Propel account.
+The test table and records can be found under the `sample_files` directory. The `e2e/main_test.go` then asserts all insertions and wipes out all records for future tests. 
+
+## Docker image publishing
+A new Docker image is published  to `propeldata/airbyte-propel-destination` with every new GitHub release. Make sure you upgrade the `io.airbyte.version` Dockerfile label.
