@@ -1,9 +1,7 @@
 name: publish
 on:
-  push:
-    branches:
-      - destination
-      - main
+  release:
+    types: [published]
 
 jobs:
   publish-docker:
