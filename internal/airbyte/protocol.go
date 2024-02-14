@@ -1,5 +1,10 @@
 package airbyte
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 // From Airbyte protocol https://github.com/airbytehq/airbyte-protocol/blob/main/protocol-models/src/main/resources/airbyte_protocol/airbyte_protocol.yaml
 
 type messageType string
@@ -120,6 +125,7 @@ const (
 	Integer PropType = "integer"
 	Object  PropType = "object"
 	Array   PropType = "array"
+	Null    PropType = "null"
 )
 
 // AirbytePropType is used to define airbyte specific property types. See more here: https://docs.airbyte.com/understanding-airbyte/supported-data-types
@@ -144,8 +150,41 @@ const (
 	Time     FormatType = "time"
 )
 
+// PropTypes describes the possible types a field may have.
+// It can be a string or an array of strings, so it is always unmarshalled as an array.
+type PropTypes struct {
+	Types []PropType `json:"types,omitempty"`
+}
+
+func (pt *PropTypes) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		pt.Types = []PropType{PropType(str)}
+		return nil
+	}
+
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err == nil {
+		pt.Types = make([]PropType, 0, len(arr))
+		for i, propType := range arr {
+			pt.Types[i] = PropType(propType)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("cannot unmarshal type %s into string or []string", data)
+}
+
+func (pt *PropTypes) MarshalJSON() ([]byte, error) {
+	if len(pt.Types) == 1 {
+		return json.Marshal(string(pt.Types[0]))
+	}
+
+	return json.Marshal(pt.Types)
+}
+
 type PropertyType struct {
-	Type        PropType        `json:"type,omitempty"`
+	TypeSet     PropTypes       `json:"type,omitempty"`
 	AirbyteType AirbytePropType `json:"airbyte_type,omitempty"`
 	Format      FormatType      `json:"format,omitempty"`
 }
