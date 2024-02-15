@@ -66,18 +66,18 @@ func NewMockApiClient(_ string) *MockApiClient {
 
 var _ PropelApiClient = (*MockApiClient)(nil)
 
-func (ac *MockApiClient) CreateDataSource(ctx context.Context, opts client.CreateDataSourceOpts) (*models.DataSource, error) {
+func (ac *MockApiClient) CreateDataSource(_ context.Context, _ client.CreateDataSourceOpts) (*models.DataSource, error) {
 	return &models.DataSource{}, nil
 }
 
-func (ac *MockApiClient) FetchDataSource(ctx context.Context, uniqueName string) (*models.DataSource, error) {
+func (ac *MockApiClient) FetchDataSource(_ context.Context, uniqueName string) (*models.DataSource, error) {
 	if mockApiError != nil {
 		return nil, mockApiError
 	}
 
 	return &models.DataSource{
-		UniqueName: "uniqueName",
-		ID:         "DPO1234567890",
+		UniqueName: uniqueName,
+		ID:         "DSO1234567890",
 		ConnectionSettings: models.ConnectionSettings{
 			WebhookConnectionSettings: models.WebhookConnectionSettings{
 				WebhookURL: "url",
@@ -87,5 +87,26 @@ func (ac *MockApiClient) FetchDataSource(ctx context.Context, uniqueName string)
 				},
 			},
 		},
+	}, nil
+}
+
+func (ac *MockApiClient) FetchDataPool(_ context.Context, _ string) (*models.DataPool, error) {
+	return &models.DataPool{
+		ID:        "DPO1234567890",
+		Timestamp: models.Timestamp{ColumnName: airbyteExtractedAtColumn},
+	}, nil
+}
+
+func (ac *MockApiClient) CreateDeletionJob(_ context.Context, _ string, _ []models.FilterInput) (*models.Job, error) {
+	return &models.Job{
+		ID:     "DPJ1234567890",
+		Status: "CREATED",
+	}, nil
+}
+
+func (ac *MockApiClient) FetchDeletionJob(_ context.Context, id string) (*models.Job, error) {
+	return &models.Job{
+		ID:     id,
+		Status: "SUCCEEDED",
 	}, nil
 }

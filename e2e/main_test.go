@@ -34,11 +34,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("unmarshal failed: %v", err)
 	}
 
-	code := m.Run()
-
-	cleanup()
-
-	os.Exit(code)
+	os.Exit(m.Run())
 }
 
 func TestWrite(t *testing.T) {
@@ -77,27 +73,4 @@ func TestWrite(t *testing.T) {
 		Delay:   30 * time.Second,
 	})
 	c.NoError(err)
-}
-
-func cleanup() {
-	ctx := context.Background()
-	oauthClient := client.NewOauthClient()
-
-	oauthToken, err := oauthClient.OAuthToken(ctx, config.AppId, config.AppSecret)
-	if err != nil {
-		log.Fatalf("invalid configuration: %v", err)
-	}
-
-	apiClient := client.NewApiClient(oauthToken.AccessToken)
-
-	dataPool, err := apiClient.FetchDataPool(ctx, dataSourceUniqueName)
-	if err != nil {
-		log.Fatalf("fetch data pool failed: %v", err)
-	}
-
-	if _, err := apiClient.CreateDeletionJob(ctx, dataPool.ID, []models.FilterInput{
-		{Column: "id", Operator: "IS_NOT_NULL"},
-	}); err != nil {
-		log.Fatalf("deletion job failed: %v", err)
-	}
 }

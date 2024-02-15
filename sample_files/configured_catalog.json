@@ -1,7 +1,8 @@
 {
   "streams": [
 	{
-	  "sync_mode": "INCREMENTAL",
+	  "sync_mode": "full_refresh",
+	  "destination_sync_mode": "overwrite",
 	  "stream": {
 		"name": "airbyte_airlines",
 		"supported_sync_modes": [

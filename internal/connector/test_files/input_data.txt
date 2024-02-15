@@ -58,3 +58,4 @@
 {"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379791, "data": {"id": 450,"name": "latam"}}}
 {"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379790, "data": {"id": 560,"name": "vivaerobus"}}}
 {"type": "RECORD", "record": { "stream": "airlines", "emitted_at": 1705379709, "data": {"id": 100,"name": "aeromexico"}}}
+{"type": "RECORD", "record": { "stream": "tacos", "emitted_at": 1705379755, "data": {"id": 1,"name": "taco"}}}

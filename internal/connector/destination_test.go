@@ -160,6 +160,7 @@ func TestDestination_Write(t *testing.T) {
 				"airlines state 3",
 				"Max batch size reached",
 				"Reading data for Data Source",
+				`Deletion Job \"DPJ1234567890\" succeeded`,
 			},
 		},
 	}

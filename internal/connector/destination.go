@@ -50,6 +50,9 @@ type PropelWebhookClient interface {
 type PropelApiClient interface {
 	CreateDataSource(ctx context.Context, opts client.CreateDataSourceOpts) (*models.DataSource, error)
 	FetchDataSource(ctx context.Context, uniqueName string) (*models.DataSource, error)
+	FetchDataPool(ctx context.Context, uniqueName string) (*models.DataPool, error)
+	CreateDeletionJob(ctx context.Context, dataPoolId string, filters []models.FilterInput) (*models.Job, error)
+	FetchDeletionJob(ctx context.Context, id string) (*models.Job, error)
 }
 
 type Destination struct {
@@ -170,9 +173,9 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 	for _, configuredStream := range configuredCatalog.Streams {
 		dataSourceUniqueName := fmt.Sprintf("%s_%s", configuredStream.Stream.Namespace, configuredStream.Stream.Name)
 
-		dataSource, err := apiClient.FetchDataSource(ctx, dataSourceUniqueName)
-		if err != nil {
-			if !client.NotFoundError("Data Source", err) {
+		dataSource, fetchDataSourceErr := apiClient.FetchDataSource(ctx, dataSourceUniqueName)
+		if fetchDataSourceErr != nil {
+			if !client.NotFoundError("Data Source", fetchDataSourceErr) {
 				d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Fetch Data Source %q failed: %v", dataSourceUniqueName, err))
 				return fmt.Errorf("failed to get Data Source: %w", err)
 			}
@@ -237,6 +240,51 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 				d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Failed status transition of Data Source %q: %v", dataSourceUniqueName, err))
 				return err
 			}
+		} else if configuredStream.DestinationSyncMode == airbyte.DestinationSyncModeOverwrite {
+			dataPool, err := apiClient.FetchDataPool(ctx, dataSourceUniqueName)
+			if err != nil {
+				d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Fetch Data Pool %q failed: %v", dataSourceUniqueName, err))
+				return fmt.Errorf("failed to get Data Pool: %w", err)
+			}
+
+			deletionJob, err := apiClient.CreateDeletionJob(ctx, dataPool.ID, []models.FilterInput{
+				{
+					Column:   dataPool.Timestamp.ColumnName,
+					Operator: "LESS_THAN_OR_EQUAL_TO",
+					Value:    time.Now().UTC().Format(time.RFC3339Nano),
+				},
+			})
+			if err != nil {
+				d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Deletion Job creation failed: %v", err))
+				return fmt.Errorf("failed to create Deletion Job for Data Pool %q: %w", dataPool.ID, err)
+			}
+
+			deletionJobUpdated, err := client.WaitForState(client.StateChangeOps[models.Job]{
+				Pending: []string{"CREATED", "IN_PROGRESS"},
+				Target:  []string{"SUCCEEDED", "FAILED"},
+				Refresh: func() (*models.Job, string, error) {
+					resp, err := apiClient.FetchDeletionJob(ctx, deletionJob.ID)
+					if err != nil {
+						d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Fetch Deletion Job %q failed: %v", deletionJob.ID, err))
+						return nil, "", fmt.Errorf("failed to get Data Pool: %w", err)
+					}
+
+					return resp, resp.Status, nil
+				},
+				Timeout: 20 * time.Minute,
+				Delay:   3 * time.Second,
+			})
+			if err != nil {
+				d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Deletion Job %q state transition failed: %v", deletionJob.ID, err))
+				return fmt.Errorf("state transition for deletion job %q failed: %w", deletionJob.ID, err)
+			}
+
+			if deletionJobUpdated.Status == "FAILED" {
+				d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Deletion Job %q failed", deletionJob.ID))
+				return fmt.Errorf("deletion job %q failed", deletionJob.ID)
+			}
+
+			d.logger.Log(airbyte.LogLevelDebug, fmt.Sprintf("Deletion Job %q succeeded for Data Pool %q", deletionJob.ID, dataPool.ID))
 		}
 
 		d.logger.Log(airbyte.LogLevelDebug, fmt.Sprintf("Reading data for Data Source %q", dataSource.ID))
