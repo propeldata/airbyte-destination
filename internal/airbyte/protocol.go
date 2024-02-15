@@ -184,7 +184,7 @@ func (pt *PropTypes) MarshalJSON() ([]byte, error) {
 }
 
 type PropertyType struct {
-	TypeSet     PropTypes       `json:"type,omitempty"`
+	TypeSet     *PropTypes      `json:"type,omitempty"`
 	AirbyteType AirbytePropType `json:"airbyte_type,omitempty"`
 	Format      FormatType      `json:"format,omitempty"`
 }

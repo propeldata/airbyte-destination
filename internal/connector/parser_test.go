@@ -1,6 +1,7 @@
 package connector
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -10,9 +11,13 @@ import (
 
 func TestUnmarshal(t *testing.T) {
 	c := require.New(t)
-	catalogPath := "./test_files/parser_sample.json"
 
 	var configuredCatalog airbyte.ConfiguredCatalog
-	err := UnmarshalFromPath(catalogPath, &configuredCatalog)
+	err := UnmarshalFromPath("./test_files/parser_sample.json", &configuredCatalog)
 	c.NoError(err)
+
+	bytes, err := json.Marshal(configuredCatalog)
+	c.NoError(err)
+	c.Contains(string(bytes), `"repository":{"title":"","description":"","type":"string"`)
+	c.Contains(string(bytes), `"protection_url":{"title":"","description":"","type":["null","string"]}`)
 }

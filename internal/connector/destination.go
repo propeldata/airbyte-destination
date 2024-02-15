@@ -96,7 +96,7 @@ func (d *Destination) Spec() *airbyte.ConnectorSpecification {
 						Description: "Propel Application ID",
 						Examples:    []string{"APP00000000000000000000000000"},
 						PropertyType: airbyte.PropertyType{
-							TypeSet: airbyte.PropTypes{
+							TypeSet: &airbyte.PropTypes{
 								Types: []airbyte.PropType{airbyte.String},
 							},
 						},
@@ -105,7 +105,7 @@ func (d *Destination) Spec() *airbyte.ConnectorSpecification {
 						Title:       "Application secret",
 						Description: "Propel Application secret",
 						PropertyType: airbyte.PropertyType{
-							TypeSet: airbyte.PropTypes{
+							TypeSet: &airbyte.PropTypes{
 								Types: []airbyte.PropType{airbyte.String},
 							},
 						},

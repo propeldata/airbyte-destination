@@ -10,15 +10,19 @@ import (
 
 func ConvertAirbyteTypeToPropelType(airbyteProperty airbyte.PropertyType) (models.PropelType, error) {
 	var propelType models.PropelType
-
-	if len(airbyteProperty.TypeSet.Types) > 2 {
+	if airbyteProperty.TypeSet == nil || len(airbyteProperty.TypeSet.Types) == 0 {
+		// if no general type is specified, default to string
 		return models.StringPropelType, nil
 	}
 
-	for _, aType := range airbyteProperty.TypeSet.Types {
+	types := removeNullType(airbyteProperty.TypeSet.Types)
+	if len(types) > 1 {
+		// if field may have different types, default to string
+		return models.StringPropelType, nil
+	}
+
+	for _, aType := range types {
 		switch aType {
-		case airbyte.Null:
-			continue
 		case airbyte.String:
 			switch airbyteProperty.Format {
 			case airbyte.Date:
@@ -44,9 +48,21 @@ func ConvertAirbyteTypeToPropelType(airbyteProperty airbyte.PropertyType) (model
 		case airbyte.Object, airbyte.Array:
 			propelType = models.JsonPropelType
 		default:
-			return models.PropelType{}, fmt.Errorf("airbyte type %v:%s:%s not supported", aType, airbyteProperty.Format, airbyteProperty.AirbyteType)
+			return models.PropelType{}, fmt.Errorf("airbyte type %s:%s:%s not supported", aType, airbyteProperty.Format, airbyteProperty.AirbyteType)
 		}
 	}
 
 	return propelType, nil
+}
+
+func removeNullType(input []airbyte.PropType) []airbyte.PropType {
+	result := make([]airbyte.PropType, 0, len(input))
+
+	for _, s := range input {
+		if s != airbyte.Null {
+			result = append(result, s)
+		}
+	}
+
+	return result
 }
