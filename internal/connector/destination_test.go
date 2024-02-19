@@ -47,11 +47,11 @@ func TestDestination_Check(t *testing.T) {
 			expectedLogs:    `"level":"ERROR","message":"Configuration is invalid: open invalid/config/path: no such file or directory"`,
 		},
 		{
-			name:           "Invalid OAuth token",
+			name:           "Invalid Access token",
 			configPath:     configPath,
 			expectedStatus: airbyte.CheckStatusFailed,
 			mockError:      "invalid oauth token",
-			expectedLogs:   `"level":"ERROR","message":"OAuth token request failed:`,
+			expectedLogs:   `"level":"ERROR","message":"Access token request failed:`,
 		},
 		{
 			name:            "Successful check",
@@ -119,12 +119,12 @@ func TestDestination_Write(t *testing.T) {
 			expectedError: "configured catalog is invalid. Unable to parse it",
 		},
 		{
-			name:           "Invalid OAuth token",
+			name:           "Invalid Access token",
 			configPath:     configPath,
 			catalogPath:    catalogPath,
 			inputDataPath:  inputDataPath,
 			mockOAuthError: errors.New("mock OAuth error"),
-			expectedLogs:   []string{`"level":"ERROR","message":"OAuth token request failed:`},
+			expectedLogs:   []string{`"level":"ERROR","message":"Access token request failed:`},
 			expectedError:  "generating a Propel access token failed",
 		},
 		{
