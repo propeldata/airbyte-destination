@@ -156,6 +156,9 @@ type PropTypes struct {
 	Types []PropType `json:"types,omitempty"`
 }
 
+// UnmarshalJSON converts a single PropType string into an array with just one PropType item.
+// This is because a column may have one or multiple types defined as just a string (e.g. "int64") or
+// an array of multiple strings (e.g. ["int64", "object", "null"]
 func (pt *PropTypes) UnmarshalJSON(data []byte) error {
 	var str string
 	if err := json.Unmarshal(data, &str); err == nil {
