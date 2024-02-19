@@ -1,7 +1,7 @@
 .PHONY: build
 
 BINARY=propel-airbyte-destination
-VERSION=0.0.15
+VERSION=0.0.1
 
 build: build-amd64 build-arm64
 
