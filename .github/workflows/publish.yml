@@ -3,7 +3,6 @@ on:
   push:
     branches:
       - main
-      - publish-docker-job
 
 jobs:
   push-docker:
