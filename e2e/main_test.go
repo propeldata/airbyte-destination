@@ -53,8 +53,8 @@ func TestWrite(t *testing.T) {
 	c.Len(dataSource.ConnectionSettings.WebhookConnectionSettings.Columns, 4)
 
 	_, err = client.WaitForState(client.StateChangeOps[models.DataGridResponse]{
-		Pending: []string{"0", "1", "2", "3", "4", "5", "6", "7"},
-		Target:  []string{"8"},
+		Pending: []string{"0", "1", "2", "3", "4", "5", "6", "7"}, // Record count before all records are ingested
+		Target:  []string{"8"},                                    // Expected final record count
 		Refresh: func() (*models.DataGridResponse, string, error) {
 			dataGrid, err := apiClient.FetchDataGrid(ctx, models.DataGridInput{
 				DataPool: models.DataPoolInput{Name: dataSourceUniqueName},

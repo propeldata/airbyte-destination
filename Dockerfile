@@ -15,7 +15,8 @@ WORKDIR /base
 COPY --from=builder /base/propel-airbyte-destination /base/
 RUN chmod 755 /base/propel-airbyte-destination
 
-LABEL io.airbyte.version=0.0.1
+ARG VERSION
+LABEL io.airbyte.version=$VERSION
 LABEL io.airbyte.name=airbyte/destination-propel
 
 ENV AIRBYTE_ENTRYPOINT "/base/propel-airbyte-destination"

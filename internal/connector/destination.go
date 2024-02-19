@@ -81,7 +81,7 @@ func (d *Destination) Spec() *airbyte.ConnectorSpecification {
 	return &airbyte.ConnectorSpecification{
 		DocumentationURL:      "https://propeldata.com/docs",
 		ChangeLogURL:          "https://propeldata.com/docs",
-		SupportsIncremental:   true,
+		SupportsIncremental:   false,
 		SupportsNormalization: false,
 		SupportsDBT:           false,
 		SupportedDestinationSyncModes: []airbyte.DestinationSyncMode{
@@ -134,7 +134,7 @@ func (d *Destination) Check(dstCfgPath string) *airbyte.ConnectionStatus {
 
 	_, err := d.oauthClient.OAuthToken(context.Background(), dstCfg.ApplicationID, dstCfg.ApplicationSecret)
 	if err != nil {
-		d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("OAuth token request failed: %v", err))
+		d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Access token request failed: %v", err))
 		return &airbyte.ConnectionStatus{
 			Status:  airbyte.CheckStatusFailed,
 			Message: fmt.Sprintf("Generating a Propel access token failed: %v", err),
@@ -164,7 +164,7 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 
 	oauthToken, err := d.oauthClient.OAuthToken(context.Background(), dstCfg.ApplicationID, dstCfg.ApplicationSecret)
 	if err != nil {
-		d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("OAuth token request failed: %v", err))
+		d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Access token request failed: %v", err))
 		return fmt.Errorf("generating a Propel access token failed: %w", err)
 	}
 

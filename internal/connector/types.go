@@ -10,12 +10,18 @@ import (
 
 func ConvertAirbyteTypeToPropelType(airbyteProperty airbyte.PropertyType) (models.PropelType, error) {
 	var propelType models.PropelType
-	if airbyteProperty.TypeSet == nil || len(airbyteProperty.TypeSet.Types) == 0 {
+
+	if airbyteProperty.TypeSet == nil {
 		// if no general type is specified, default to string
 		return models.StringPropelType, nil
 	}
 
 	types := removeNullType(airbyteProperty.TypeSet.Types)
+	if len(types) == 0 {
+		// if no general type is specified, default to string
+		return models.StringPropelType, nil
+	}
+
 	if len(types) > 1 {
 		// if field may have different types, default to string
 		return models.StringPropelType, nil

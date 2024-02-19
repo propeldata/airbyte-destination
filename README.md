@@ -46,4 +46,5 @@ All three commands are run for integration tests, using our e2e Production Prope
 The test table and records can be found under the `sample_files` directory. The `e2e/main_test.go` then asserts all insertions and wipes out all records for future tests. 
 
 ## Docker image publishing
-A new Docker image is published  to `propeldata/airbyte-propel-destination` with every new GitHub release. Make sure you upgrade the `io.airbyte.version` Dockerfile label.
+A new Docker image is published  to `propeldata/airbyte-propel-destination` with every pull request that is merged to `main`. 
+> ⚠️ Remember to upgrade the version in the `Makefile`.
