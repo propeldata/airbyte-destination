@@ -81,12 +81,13 @@ func (d *Destination) Spec() *airbyte.ConnectorSpecification {
 	return &airbyte.ConnectorSpecification{
 		DocumentationURL:      "https://propeldata.com/docs",
 		ChangeLogURL:          "https://propeldata.com/docs",
-		SupportsIncremental:   false,
+		SupportsIncremental:   true,
 		SupportsNormalization: false,
 		SupportsDBT:           false,
 		SupportedDestinationSyncModes: []airbyte.DestinationSyncMode{
 			airbyte.DestinationSyncModeOverwrite,
 			airbyte.DestinationSyncModeAppend,
+			airbyte.DestinationSyncModeAppendDedup,
 		},
 		ConnectionSpecification: airbyte.ConnectionSpecification{
 			Title:    "Propel Destination Spec",
@@ -206,6 +207,16 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 
 			columns = append(columns, defaultAirbyteColumns...)
 
+			orderByColumns := make([]string, 0, len(configuredStream.PrimaryKey))
+			for _, pk := range configuredStream.PrimaryKey {
+				if len(pk) != 1 {
+					d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Unexpected primary key length %d for Data Source %q", len(pk), dataSourceUniqueName))
+					return fmt.Errorf("unexpected primary key length %d for Data Source %q", len(pk), dataSourceUniqueName)
+				}
+
+				orderByColumns = append(orderByColumns, pk[0])
+			}
+
 			dataSource, err = apiClient.CreateDataSource(ctx, client.CreateDataSourceOpts{
 				Name: dataSourceUniqueName,
 				BasicAuth: &models.HttpBasicAuthInput{
@@ -213,8 +224,8 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 					Password: authPassword,
 				},
 				Columns:   columns,
-				Timestamp: airbyteExtractedAtColumn,
-				UniqueID:  airbyteRawIdColumn,
+				Timestamp: ptr(airbyteExtractedAtColumn),
+				UniqueID:  ptr(airbyteRawIdColumn),
 			})
 			if err != nil {
 				d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Data Source creation failed: %v", err))
@@ -251,7 +262,7 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 				{
 					Column:   dataPool.Timestamp.ColumnName,
 					Operator: "LESS_THAN_OR_EQUAL_TO",
-					Value:    time.Now().UTC().Format(time.RFC3339Nano),
+					Value:    ptr(time.Now().UTC().Format(time.RFC3339Nano)),
 				},
 			})
 			if err != nil {
@@ -359,4 +370,8 @@ func (d *Destination) publishBatch(ctx context.Context, dataSource *models.DataS
 	}
 
 	return nil
+}
+
+func ptr[T any](value T) *T {
+	return &value
 }

@@ -59,7 +59,7 @@ func TestWrite(t *testing.T) {
 			dataGrid, err := apiClient.FetchDataGrid(ctx, models.DataGridInput{
 				DataPool: models.DataPoolInput{Name: dataSourceUniqueName},
 				Columns:  []string{"id", "name"},
-				TimeRange: models.TimeRangeInput{
+				TimeRange: &models.TimeRangeInput{
 					Relative: "LAST_N_DAYS",
 					N:        365,
 					Start:    time.Unix(1705379000, 0),
