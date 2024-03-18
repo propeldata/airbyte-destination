@@ -304,7 +304,7 @@ func (d *Destination) buildAndCreateDataSource(ctx context.Context, configuredSt
 	}
 
 	if len(orderByColumns) == 0 && configuredStream.DestinationSyncMode == airbyte.DestinationSyncModeAppendDedup {
-		d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Append Dedup sync mode requires at least 1 primary key"))
+		d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Append Dedup sync mode requires at least 1 primary key column"))
 		return nil, fmt.Errorf("no primary keys were found for Data Source %q", dataSourceUniqueName)
 	}
 
