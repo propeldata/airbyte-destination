@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 
+	"github.com/hasura/go-graphql-client"
 	"github.com/propeldata/go-client"
 	"github.com/propeldata/go-client/models"
 
@@ -15,6 +16,7 @@ var (
 	mockOAuthError   error = nil
 	mockWebhookError error = nil
 	mockApiError     error = nil
+	requestCounter   int   = 0
 )
 
 type MockOauthClient struct{}
@@ -66,8 +68,55 @@ func NewMockApiClient(_ string) *MockApiClient {
 
 var _ PropelApiClient = (*MockApiClient)(nil)
 
-func (ac *MockApiClient) CreateDataSource(_ context.Context, _ client.CreateDataSourceOpts) (*models.DataSource, error) {
-	return &models.DataSource{}, nil
+func (ac *MockApiClient) CreateDataSource(_ context.Context, opts client.CreateDataSourceOpts) (*models.DataSource, error) {
+	columns := make([]models.WebhookColumn, 0, len(opts.Columns))
+	for _, col := range opts.Columns {
+		columns = append(columns, models.WebhookColumn{
+			Name:         col.Name,
+			Type:         col.Type,
+			Nullable:     col.Nullable,
+			JsonProperty: col.JsonProperty,
+		})
+	}
+
+	var tableSettings *models.TableSettings
+	if opts.TableSettings != nil {
+		tableSettings = &models.TableSettings{
+			PrimaryKey:  opts.TableSettings.PrimaryKey,
+			PartitionBy: opts.TableSettings.PartitionBy,
+			OrderBy:     opts.TableSettings.OrderBy,
+			Engine: &models.Engine{ReplacingMergeTreeTableEngine: models.ReplacingMergeTreeTableEngine{
+				Ver: opts.TableSettings.Engine.ReplacingMergeTree.Ver,
+			}},
+		}
+	}
+
+	var timestamp string
+	if opts.Timestamp != nil {
+		timestamp = *opts.Timestamp
+	}
+
+	var uniqueID string
+	if opts.UniqueID != nil {
+		uniqueID = *opts.UniqueID
+	}
+
+	return &models.DataSource{
+		UniqueName: opts.Name,
+		ConnectionSettings: models.ConnectionSettings{
+			WebhookConnectionSettings: models.WebhookConnectionSettings{
+				WebhookURL: "https://mockURL.com/v1/WHK1234",
+				BasicAuth: &models.HttpBasicAuth{
+					Username: opts.BasicAuth.Username,
+					Password: opts.BasicAuth.Password,
+				},
+				Columns:       columns,
+				Timestamp:     timestamp,
+				UniqueID:      uniqueID,
+				TableSettings: tableSettings,
+			},
+		},
+	}, nil
 }
 
 func (ac *MockApiClient) FetchDataSource(_ context.Context, uniqueName string) (*models.DataSource, error) {
@@ -75,19 +124,55 @@ func (ac *MockApiClient) FetchDataSource(_ context.Context, uniqueName string) (
 		return nil, mockApiError
 	}
 
-	return &models.DataSource{
-		UniqueName: uniqueName,
-		ID:         "DSO1234567890",
-		ConnectionSettings: models.ConnectionSettings{
-			WebhookConnectionSettings: models.WebhookConnectionSettings{
-				WebhookURL: "url",
-				BasicAuth: &models.HttpBasicAuth{
-					Username: "username",
-					Password: "password",
+	switch uniqueName {
+	case "_tacos", "_airlines":
+		return &models.DataSource{
+			UniqueName: uniqueName,
+			ID:         "DSO1234567890",
+			ConnectionSettings: models.ConnectionSettings{
+				WebhookConnectionSettings: models.WebhookConnectionSettings{
+					WebhookURL: "url",
+					BasicAuth: &models.HttpBasicAuth{
+						Username: "username",
+						Password: "password",
+					},
+					UniqueID: airbyteRawIdColumn,
 				},
 			},
-		},
-	}, nil
+		}, nil
+	case "_deduped stream":
+		if requestCounter > 0 {
+			return &models.DataSource{
+				UniqueName: uniqueName,
+				ID:         "DSO9876543210",
+				Status:     "CONNECTED",
+				ConnectionSettings: models.ConnectionSettings{
+					WebhookConnectionSettings: models.WebhookConnectionSettings{
+						WebhookURL: "url",
+						BasicAuth: &models.HttpBasicAuth{
+							Username: "username",
+							Password: "password",
+						},
+						TableSettings: &models.TableSettings{
+							PrimaryKey:  []string{},
+							PartitionBy: []string{},
+							OrderBy:     []string{"id"},
+							Engine: &models.Engine{ReplacingMergeTreeTableEngine: models.ReplacingMergeTreeTableEngine{
+								Ver: "updated_at",
+							}},
+						},
+					},
+				},
+			}, nil
+		}
+	}
+
+	requestCounter += 1
+
+	return nil, graphql.Errors{{
+		Message:    "Data Source not found",
+		Extensions: map[string]interface{}{"code": "NOT_FOUND"},
+	}}
 }
 
 func (ac *MockApiClient) FetchDataPool(_ context.Context, _ string) (*models.DataPool, error) {

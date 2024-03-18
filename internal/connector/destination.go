@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -171,8 +172,10 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 
 	apiClient := newApiClient(oauthToken.AccessToken)
 
+	dataSources := map[string]*models.DataSource{}
+
 	for _, configuredStream := range configuredCatalog.Streams {
-		dataSourceUniqueName := fmt.Sprintf("%s_%s", configuredStream.Stream.Namespace, configuredStream.Stream.Name)
+		dataSourceUniqueName := getDataSourceUniqueName(configuredStream.Stream.Namespace, configuredStream.Stream.Name)
 
 		dataSource, fetchDataSourceErr := apiClient.FetchDataSource(ctx, dataSourceUniqueName)
 		if fetchDataSourceErr != nil {
@@ -181,74 +184,8 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 				return fmt.Errorf("failed to get Data Source: %w", err)
 			}
 
-			// Generates a password of 18 chars length with 2 digits, 2 symbols and uppercase letters.
-			authPassword, err := password.Generate(18, 2, 2, false, false)
+			dataSource, err = d.buildAndCreateDataSource(ctx, configuredStream, dataSourceUniqueName, apiClient)
 			if err != nil {
-				d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Password generation failed: %v", err))
-				return fmt.Errorf("failed to generate Basic auth password for Data Source %q: %w", dataSourceUniqueName, err)
-			}
-
-			columns := make([]*models.WebhookDataSourceColumnInput, 0, len(configuredStream.Stream.JSONSchema.Properties)+len(defaultAirbyteColumns))
-
-			for propertyName, propertySpec := range configuredStream.Stream.JSONSchema.Properties {
-				columnType, err := ConvertAirbyteTypeToPropelType(propertySpec.PropertyType)
-				if err != nil {
-					d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Airbyte to Propel data type conversion failed for Data Source %q: %v", dataSourceUniqueName, err))
-					return fmt.Errorf("failed to convert Airbyte to Propel data type: %w", err)
-				}
-
-				columns = append(columns, &models.WebhookDataSourceColumnInput{
-					Name:         propertyName,
-					Type:         columnType,
-					Nullable:     true,
-					JsonProperty: propertyName,
-				})
-			}
-
-			columns = append(columns, defaultAirbyteColumns...)
-
-			orderByColumns := make([]string, 0, len(configuredStream.PrimaryKey))
-			for _, pk := range configuredStream.PrimaryKey {
-				if len(pk) != 1 {
-					d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Unexpected primary key length %d for Data Source %q", len(pk), dataSourceUniqueName))
-					return fmt.Errorf("unexpected primary key length %d for Data Source %q", len(pk), dataSourceUniqueName)
-				}
-
-				orderByColumns = append(orderByColumns, pk[0])
-			}
-
-			dataSource, err = apiClient.CreateDataSource(ctx, client.CreateDataSourceOpts{
-				Name: dataSourceUniqueName,
-				BasicAuth: &models.HttpBasicAuthInput{
-					Username: configuredStream.Stream.Namespace,
-					Password: authPassword,
-				},
-				Columns:   columns,
-				Timestamp: ptr(airbyteExtractedAtColumn),
-				UniqueID:  ptr(airbyteRawIdColumn),
-			})
-			if err != nil {
-				d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Data Source creation failed: %v", err))
-				return fmt.Errorf("failed to create Data Source %q: %w", dataSourceUniqueName, err)
-			}
-
-			waitForStateOps := client.StateChangeOps[models.DataSource]{
-				Pending: []string{"CREATED", "CONNECTING"},
-				Target:  []string{"CONNECTED"},
-				Refresh: func() (*models.DataSource, string, error) {
-					resp, err := apiClient.FetchDataSource(ctx, dataSourceUniqueName)
-					if err != nil {
-						return nil, "", fmt.Errorf("failed to check the status of table %q: %w", dataSourceUniqueName, err)
-					}
-
-					return resp, resp.Status, nil
-				},
-				Timeout: 3 * time.Minute,
-				Delay:   3 * time.Second,
-			}
-
-			if _, err = client.WaitForState(waitForStateOps); err != nil {
-				d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Failed status transition of Data Source %q: %v", dataSourceUniqueName, err))
 				return err
 			}
 		} else if configuredStream.DestinationSyncMode == airbyte.DestinationSyncModeOverwrite {
@@ -258,13 +195,11 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 				return fmt.Errorf("failed to get Data Pool: %w", err)
 			}
 
-			deletionJob, err := apiClient.CreateDeletionJob(ctx, dataPool.ID, []models.FilterInput{
-				{
-					Column:   dataPool.Timestamp.ColumnName,
-					Operator: "LESS_THAN_OR_EQUAL_TO",
-					Value:    ptr(time.Now().UTC().Format(time.RFC3339Nano)),
-				},
-			})
+			deletionJob, err := apiClient.CreateDeletionJob(ctx, dataPool.ID, []models.FilterInput{{
+				Column:   "_propel_received_at",
+				Operator: "LESS_THAN_OR_EQUAL_TO",
+				Value:    ptr(time.Now().UTC().Format(time.RFC3339Nano)),
+			}})
 			if err != nil {
 				d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Deletion Job creation failed: %v", err))
 				return fmt.Errorf("failed to create Deletion Job for Data Pool %q: %w", dataPool.ID, err)
@@ -298,51 +233,205 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 			d.logger.Log(airbyte.LogLevelDebug, fmt.Sprintf("Deletion Job %q succeeded for Data Pool %q", deletionJob.ID, dataPool.ID))
 		}
 
-		d.logger.Log(airbyte.LogLevelDebug, fmt.Sprintf("Reading data for Data Source %q", dataSource.ID))
+		dataSources[dataSourceUniqueName] = dataSource
+		uniqueID := dataSource.ConnectionSettings.WebhookConnectionSettings.UniqueID
 
-		batchedRecords := make([]map[string]any, 0, maxRecordsBatchSize)
+		if uniqueID == airbyteRawIdColumn && configuredStream.DestinationSyncMode == airbyte.DestinationSyncModeAppendDedup {
+			d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Dedup destination sync mode is not compatible with Data Pool %q unique ID", dataSource.ID))
+			return fmt.Errorf("append_dedup destination sync mode is not compatible with Data Pool %q unique ID", dataSource.ID)
+		}
+
+		if uniqueID != airbyteRawIdColumn && configuredStream.DestinationSyncMode == airbyte.DestinationSyncModeAppend {
+			d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Append destination sync mode is not compatible with Data Pool %q ORDER BY statement", dataSource.ID))
+			return fmt.Errorf("append destination sync mode is not compatible with Data Pool %q ORDER BY statement", dataSource.ID)
+		}
+	}
+
+	if err := d.writeRecords(ctx, input, dataSources); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (d *Destination) buildAndCreateDataSource(ctx context.Context, configuredStream airbyte.ConfiguredStream, dataSourceUniqueName string, apiClient PropelApiClient) (*models.DataSource, error) {
+	// Generates a password of 18 chars length with 2 digits, 2 symbols and uppercase letters.
+	authPassword, err := password.Generate(18, 2, 2, false, false)
+	if err != nil {
+		d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Password generation failed: %v", err))
+		return nil, fmt.Errorf("failed to generate Basic auth password for Data Source %q: %w", dataSourceUniqueName, err)
+	}
+
+	orderByColumns := make([]string, 0, len(configuredStream.PrimaryKey))
+	for _, pk := range configuredStream.PrimaryKey {
+		if len(pk) != 1 {
+			d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Unexpected primary key length %d for Data Source %q", len(pk), dataSourceUniqueName))
+			return nil, fmt.Errorf("unexpected primary key length %d for Data Source %q", len(pk), dataSourceUniqueName)
+		}
+
+		orderByColumns = append(orderByColumns, pk[0])
+	}
+
+	var cursorField string
+	if len(configuredStream.CursorField) > 0 {
+		cursorField = configuredStream.CursorField[0]
+	}
+
+	baseColumns := make([]*models.WebhookDataSourceColumnInput, 0, len(configuredStream.Stream.JSONSchema.Properties)+len(defaultAirbyteColumns))
+
+	for propertyName, propertySpec := range configuredStream.Stream.JSONSchema.Properties {
+		columnType, err := ConvertAirbyteTypeToPropelType(propertySpec.PropertyType)
+		if err != nil {
+			d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Airbyte to Propel data type conversion failed for Data Source %q: %v", dataSourceUniqueName, err))
+			return nil, fmt.Errorf("failed to convert Airbyte to Propel data type: %w", err)
+		}
+
+		baseColumns = append(baseColumns, &models.WebhookDataSourceColumnInput{
+			Name:         propertyName,
+			Type:         columnType,
+			Nullable:     !slices.Contains(orderByColumns, propertyName) && propertyName != cursorField,
+			JsonProperty: propertyName,
+		})
+	}
+
+	createDataSourceOpts := client.CreateDataSourceOpts{
+		Name: dataSourceUniqueName,
+		BasicAuth: &models.HttpBasicAuthInput{
+			Username: configuredStream.Stream.Namespace,
+			Password: authPassword,
+		},
+		Columns: baseColumns,
+	}
+
+	if len(orderByColumns) == 0 && configuredStream.DestinationSyncMode == airbyte.DestinationSyncModeAppendDedup {
+		d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Append Dedup sync mode requires at least 1 primary key"))
+		return nil, fmt.Errorf("no primary keys were found for Data Source %q", dataSourceUniqueName)
+	}
+
+	if (len(orderByColumns) == 0 && configuredStream.DestinationSyncMode == airbyte.DestinationSyncModeOverwrite) || configuredStream.DestinationSyncMode == airbyte.DestinationSyncModeAppend {
+		createDataSourceOpts.Columns = append(createDataSourceOpts.Columns, defaultAirbyteColumns...)
+		createDataSourceOpts.Timestamp = ptr(airbyteExtractedAtColumn)
+		createDataSourceOpts.UniqueID = ptr(airbyteRawIdColumn)
+
+		return d.createDataSource(ctx, apiClient, createDataSourceOpts)
+	}
+
+	createDataSourceOpts.TableSettings = &models.TableSettingsInput{
+		PrimaryKey:  []string{}, // these must be explicitly empty
+		PartitionBy: []string{},
+		OrderBy:     orderByColumns,
+		Engine: &models.TableEngineInput{
+			ReplacingMergeTree: &models.ReplacingMergeTree{Type: models.TableEngineReplacingMergeTree},
+		},
+	}
+
+	if cursorField == "" {
+		createDataSourceOpts.Columns = append(createDataSourceOpts.Columns, defaultAirbyteColumns[1])
+		createDataSourceOpts.TableSettings.Engine.ReplacingMergeTree.Ver = airbyteExtractedAtColumn
+	} else {
+		createDataSourceOpts.TableSettings.Engine.ReplacingMergeTree.Ver = cursorField
+	}
+
+	return d.createDataSource(ctx, apiClient, createDataSourceOpts)
+}
+
+func (d *Destination) createDataSource(ctx context.Context, apiClient PropelApiClient, createDataSourceOpts client.CreateDataSourceOpts) (*models.DataSource, error) {
+	dataSource, err := apiClient.CreateDataSource(ctx, createDataSourceOpts)
+	if err != nil {
+		d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Data Source creation failed: %v", err))
+		return nil, fmt.Errorf("failed to create Data Source %q: %w", createDataSourceOpts.Name, err)
+	}
+
+	waitForStateOps := client.StateChangeOps[models.DataSource]{
+		Pending: []string{"CREATED", "CONNECTING"},
+		Target:  []string{"CONNECTED"},
+		Refresh: func() (*models.DataSource, string, error) {
+			resp, err := apiClient.FetchDataSource(ctx, createDataSourceOpts.Name)
+			if err != nil {
+				return nil, "", fmt.Errorf("failed to check the status of table %q: %w", createDataSourceOpts.Name, err)
+			}
+
+			return resp, resp.Status, nil
+		},
+		Timeout: 3 * time.Minute,
+		Delay:   3 * time.Second,
+	}
+
+	if _, err = client.WaitForState(waitForStateOps); err != nil {
+		d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Failed status transition of Data Source %q: %v", createDataSourceOpts.Name, err))
+		return nil, err
+	}
+
+	return dataSource, nil
+}
+func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSources map[string]*models.DataSource) error {
+	batchedRecordsPerDataSource := make(map[string][]map[string]any)
+	for dataSourceName := range dataSources {
+		batchedRecordsPerDataSource[dataSourceName] = make([]map[string]any, 0, maxRecordsBatchSize)
+	}
+
+	scanner := bufio.NewScanner(input)
+	for scanner.Scan() {
+		var airbyteMessage airbyte.Message
+		if err := json.Unmarshal(scanner.Bytes(), &airbyteMessage); err != nil {
+			d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Failed to parse record: %v", err))
+			return fmt.Errorf("failed to parse record: %w", err)
+		}
+
+		switch airbyteMessage.Type {
+		case airbyte.MessageTypeState:
+			for dataSourceName, dataSource := range dataSources {
+				eventsInput := &client.PostEventsInput{
+					WebhookURL:   dataSource.ConnectionSettings.WebhookConnectionSettings.WebhookURL,
+					AuthUsername: dataSource.ConnectionSettings.WebhookConnectionSettings.BasicAuth.Username,
+					AuthPassword: dataSource.ConnectionSettings.WebhookConnectionSettings.BasicAuth.Password,
+				}
+				if err := d.publishBatch(ctx, dataSource, eventsInput, batchedRecordsPerDataSource[dataSourceName]); err != nil {
+					return fmt.Errorf("publish batch failed after state message for Data Source %q: %w", dataSource.ID, err)
+				}
+
+				batchedRecordsPerDataSource[dataSourceName] = batchedRecordsPerDataSource[dataSourceName][:0]
+			}
+
+			d.logger.State(airbyteMessage.State)
+		case airbyte.MessageTypeRecord:
+			dataSource := dataSources[getDataSourceUniqueName(airbyteMessage.Record.Namespace, airbyteMessage.Record.Stream)]
+			recordMap := airbyteMessage.Record.Data
+
+			if dataSource.ConnectionSettings.WebhookConnectionSettings.UniqueID == airbyteRawIdColumn {
+				recordMap[airbyteRawIdColumn] = uuid.New().String()
+				recordMap[airbyteExtractedAtColumn] = airbyteMessage.Record.EmittedAt
+			} else if dataSource.ConnectionSettings.WebhookConnectionSettings.TableSettings.Engine.ReplacingMergeTreeTableEngine.Ver == airbyteExtractedAtColumn {
+				recordMap[airbyteExtractedAtColumn] = airbyteMessage.Record.EmittedAt
+			}
+
+			if len(batchedRecordsPerDataSource[dataSource.UniqueName]) == maxRecordsBatchSize {
+				eventsInput := &client.PostEventsInput{
+					WebhookURL:   dataSource.ConnectionSettings.WebhookConnectionSettings.WebhookURL,
+					AuthUsername: dataSource.ConnectionSettings.WebhookConnectionSettings.BasicAuth.Username,
+					AuthPassword: dataSource.ConnectionSettings.WebhookConnectionSettings.BasicAuth.Password,
+				}
+
+				d.logger.Log(airbyte.LogLevelDebug, fmt.Sprintf("Max batch size reached for Data Source %q", dataSource.ID))
+				if err := d.publishBatch(ctx, dataSource, eventsInput, batchedRecordsPerDataSource[dataSource.UniqueName]); err != nil {
+					return fmt.Errorf("publish batch failed after max batch size was reached for Data Source %q: %w", dataSource.ID, err)
+				}
+
+				batchedRecordsPerDataSource[dataSource.UniqueName] = batchedRecordsPerDataSource[dataSource.UniqueName][:0]
+			}
+
+			batchedRecordsPerDataSource[dataSource.UniqueName] = append(batchedRecordsPerDataSource[dataSource.UniqueName], recordMap)
+		}
+	}
+
+	for dataSourceName, dataSource := range dataSources {
 		eventsInput := &client.PostEventsInput{
 			WebhookURL:   dataSource.ConnectionSettings.WebhookConnectionSettings.WebhookURL,
 			AuthUsername: dataSource.ConnectionSettings.WebhookConnectionSettings.BasicAuth.Username,
 			AuthPassword: dataSource.ConnectionSettings.WebhookConnectionSettings.BasicAuth.Password,
 		}
 
-		scanner := bufio.NewScanner(input)
-		for scanner.Scan() {
-			var airbyteMessage airbyte.Message
-			if err := json.Unmarshal(scanner.Bytes(), &airbyteMessage); err != nil {
-				d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Failed to parse record: %v", err))
-				return fmt.Errorf("failed to parse record for Data Source %q: %w", dataSource.ID, err)
-			}
-
-			switch airbyteMessage.Type {
-			case airbyte.MessageTypeState:
-				if err = d.publishBatch(ctx, dataSource, configuredStream, eventsInput, batchedRecords); err != nil {
-					return fmt.Errorf("publish batch failed after state message for Data Source %q: %w", dataSource.ID, err)
-				}
-
-				batchedRecords = batchedRecords[:0]
-				d.logger.State(airbyteMessage.State)
-
-			case airbyte.MessageTypeRecord:
-				recordMap := airbyteMessage.Record.Data
-				recordMap[airbyteRawIdColumn] = uuid.New().String()
-				recordMap[airbyteExtractedAtColumn] = airbyteMessage.Record.EmittedAt
-
-				if len(batchedRecords) == maxRecordsBatchSize {
-					d.logger.Log(airbyte.LogLevelDebug, fmt.Sprintf("Max batch size reached for Data Source %q", dataSource.ID))
-					if err = d.publishBatch(ctx, dataSource, configuredStream, eventsInput, batchedRecords); err != nil {
-						return fmt.Errorf("publish batch failed after max batch size was reached for Data Source %q: %w", dataSource.ID, err)
-					}
-
-					batchedRecords = batchedRecords[:0]
-				}
-
-				batchedRecords = append(batchedRecords, recordMap)
-			}
-		}
-
-		if err = d.publishBatch(ctx, dataSource, configuredStream, eventsInput, batchedRecords); err != nil {
+		if err := d.publishBatch(ctx, dataSource, eventsInput, batchedRecordsPerDataSource[dataSourceName]); err != nil {
 			return fmt.Errorf("publish batch failed for remaining records in Data Source %q: %w", dataSource.ID, err)
 		}
 	}
@@ -350,7 +439,7 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 	return nil
 }
 
-func (d *Destination) publishBatch(ctx context.Context, dataSource *models.DataSource, configuredStream airbyte.ConfiguredStream, eventsInput *client.PostEventsInput, events []map[string]any) error {
+func (d *Destination) publishBatch(ctx context.Context, dataSource *models.DataSource, eventsInput *client.PostEventsInput, events []map[string]any) error {
 	if len(events) == 0 {
 		return nil
 	}
@@ -365,11 +454,15 @@ func (d *Destination) publishBatch(ctx context.Context, dataSource *models.DataS
 
 	for _, eventError := range eventErrors {
 		if eventError != nil {
-			d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("failed to store stream %s: %v", configuredStream.Stream.Name, eventError))
+			d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("failed to store events in Data Pool %q: %v", dataSource.UniqueName, eventError))
 		}
 	}
 
 	return nil
+}
+
+func getDataSourceUniqueName(namespace, streamName string) string {
+	return fmt.Sprintf("%s_%s", namespace, streamName)
 }
 
 func ptr[T any](value T) *T {

@@ -27,7 +27,7 @@ func TestDestination_Spec(t *testing.T) {
 
 	spec := d.Spec()
 	c.Equal("https://propeldata.com/docs", spec.DocumentationURL)
-	c.Equal([]airbyte.DestinationSyncMode{"overwrite", "append"}, spec.SupportedDestinationSyncModes)
+	c.Equal([]airbyte.DestinationSyncMode{"overwrite", "append", "append_dedup"}, spec.SupportedDestinationSyncModes)
 }
 
 func TestDestination_Check(t *testing.T) {
@@ -144,7 +144,6 @@ func TestDestination_Write(t *testing.T) {
 			inputDataPath:    inputDataPath,
 			mockWebhookError: errors.New("mock webhook error"),
 			expectedLogs: []string{
-				"Reading data for Data Source",
 				"failed to publish 2 events to url:",
 			},
 			expectedError: "publish batch failed after state",
@@ -159,7 +158,6 @@ func TestDestination_Write(t *testing.T) {
 				"airlines state 2",
 				"airlines state 3",
 				"Max batch size reached",
-				"Reading data for Data Source",
 				`Deletion Job \"DPJ1234567890\" succeeded`,
 			},
 		},
