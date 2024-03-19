@@ -277,7 +277,7 @@ func (d *Destination) buildAndCreateDataSource(ctx context.Context, configuredSt
 		cursorField = configuredStream.CursorField[0]
 	}
 
-	baseColumns := make([]*models.WebhookDataSourceColumnInput, 0, len(configuredStream.Stream.JSONSchema.Properties)+len(defaultAirbyteColumns))
+	columns := make([]*models.WebhookDataSourceColumnInput, 0, len(configuredStream.Stream.JSONSchema.Properties)+len(defaultAirbyteColumns))
 
 	for propertyName, propertySpec := range configuredStream.Stream.JSONSchema.Properties {
 		columnType, err := ConvertAirbyteTypeToPropelType(propertySpec.PropertyType)
@@ -286,7 +286,7 @@ func (d *Destination) buildAndCreateDataSource(ctx context.Context, configuredSt
 			return nil, fmt.Errorf("failed to convert Airbyte to Propel data type: %w", err)
 		}
 
-		baseColumns = append(baseColumns, &models.WebhookDataSourceColumnInput{
+		columns = append(columns, &models.WebhookDataSourceColumnInput{
 			Name:         propertyName,
 			Type:         columnType,
 			Nullable:     !slices.Contains(orderByColumns, propertyName) && propertyName != cursorField,
@@ -300,7 +300,7 @@ func (d *Destination) buildAndCreateDataSource(ctx context.Context, configuredSt
 			Username: configuredStream.Stream.Namespace,
 			Password: authPassword,
 		},
-		Columns: baseColumns,
+		Columns: append(columns, defaultAirbyteColumns...),
 	}
 
 	if len(orderByColumns) == 0 && configuredStream.DestinationSyncMode == airbyte.DestinationSyncModeAppendDedup {
@@ -310,7 +310,6 @@ func (d *Destination) buildAndCreateDataSource(ctx context.Context, configuredSt
 
 	if configuredStream.DestinationSyncMode == airbyte.DestinationSyncModeAppend || cursorField == "" || len(orderByColumns) == 0 {
 		// Create Data Source that allows duplicates
-		createDataSourceOpts.Columns = append(createDataSourceOpts.Columns, defaultAirbyteColumns...)
 		createDataSourceOpts.Timestamp = ptr(airbyteExtractedAtColumn)
 		createDataSourceOpts.UniqueID = ptr(airbyteRawIdColumn)
 
@@ -372,6 +371,7 @@ func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSou
 
 	scanner := bufio.NewScanner(input)
 	for scanner.Scan() {
+		fmt.Println("entered scan")
 		var airbyteMessage airbyte.Message
 		if err := json.Unmarshal(scanner.Bytes(), &airbyteMessage); err != nil {
 			d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Failed to parse record: %v", err))
@@ -395,14 +395,11 @@ func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSou
 
 			d.logger.State(airbyteMessage.State)
 		case airbyte.MessageTypeRecord:
-			dataSource := dataSources[getDataSourceUniqueName(airbyteMessage.Record.Namespace, airbyteMessage.Record.Stream)]
 			recordMap := airbyteMessage.Record.Data
+			recordMap[airbyteRawIdColumn] = uuid.New().String()
+			recordMap[airbyteExtractedAtColumn] = airbyteMessage.Record.EmittedAt
 
-			if dataSource.ConnectionSettings.WebhookConnectionSettings.UniqueID == airbyteRawIdColumn {
-				recordMap[airbyteRawIdColumn] = uuid.New().String()
-				recordMap[airbyteExtractedAtColumn] = airbyteMessage.Record.EmittedAt
-			}
-
+			dataSource := dataSources[getDataSourceUniqueName(airbyteMessage.Record.Namespace, airbyteMessage.Record.Stream)]
 			if len(batchedRecordsPerDataSource[dataSource.UniqueName]) == maxRecordsBatchSize {
 				eventsInput := &client.PostEventsInput{
 					WebhookURL:   dataSource.ConnectionSettings.WebhookConnectionSettings.WebhookURL,
