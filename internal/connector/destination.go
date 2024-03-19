@@ -3,13 +3,16 @@ package connector
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/propeldata/go-client"
 	"github.com/propeldata/go-client/models"
 	"github.com/sethvargo/go-password/password"
@@ -369,9 +372,11 @@ func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSou
 		batchedRecordsPerDataSource[dataSourceName] = make([]map[string]any, 0, maxRecordsBatchSize)
 	}
 
+	i := 0
 	scanner := bufio.NewScanner(input)
 	for scanner.Scan() {
-		fmt.Println("entered scan")
+		fmt.Println("⭐⭐⭐⭐⭐️ ENTERED SCAN ⭐⭐⭐⭐⭐", i)
+
 		var airbyteMessage airbyte.Message
 		if err := json.Unmarshal(scanner.Bytes(), &airbyteMessage); err != nil {
 			d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Failed to parse record: %v", err))
@@ -396,7 +401,7 @@ func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSou
 			d.logger.State(airbyteMessage.State)
 		case airbyte.MessageTypeRecord:
 			recordMap := airbyteMessage.Record.Data
-			recordMap[airbyteRawIdColumn] = uuid.New().String()
+			recordMap[airbyteRawIdColumn] = getAirbyteRawID(airbyteMessage.Record.Namespace, airbyteMessage.Record.Stream, i)
 			recordMap[airbyteExtractedAtColumn] = airbyteMessage.Record.EmittedAt
 
 			dataSource := dataSources[getDataSourceUniqueName(airbyteMessage.Record.Namespace, airbyteMessage.Record.Stream)]
@@ -417,6 +422,8 @@ func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSou
 
 			batchedRecordsPerDataSource[dataSource.UniqueName] = append(batchedRecordsPerDataSource[dataSource.UniqueName], recordMap)
 		}
+
+		i++
 	}
 
 	for dataSourceName, dataSource := range dataSources {
@@ -458,6 +465,14 @@ func (d *Destination) publishBatch(ctx context.Context, dataSource *models.DataS
 
 func getDataSourceUniqueName(namespace, streamName string) string {
 	return fmt.Sprintf("%s_%s", namespace, streamName)
+}
+
+func getAirbyteRawID(namespace, streamName string, recordIndex int) string {
+	hash := sha256.New()
+	hash.Write([]byte(strings.Join([]string{namespace, streamName, strconv.Itoa(recordIndex)}, ":")))
+	hashBytes := hash.Sum(nil)
+
+	return hex.EncodeToString(hashBytes)
 }
 
 func ptr[T any](value T) *T {
