@@ -401,7 +401,7 @@ func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSou
 			d.logger.State(airbyteMessage.State)
 		case airbyte.MessageTypeRecord:
 			recordMap := airbyteMessage.Record.Data
-			recordMap[airbyteRawIdColumn] = getAirbyteRawID(airbyteMessage.Record.Namespace, airbyteMessage.Record.Stream, i)
+			recordMap[airbyteRawIdColumn] = getAirbyteRawID(airbyteMessage.Record.Namespace, airbyteMessage.Record.Stream, i, airbyteMessage.Record.EmittedAt)
 			recordMap[airbyteExtractedAtColumn] = airbyteMessage.Record.EmittedAt
 
 			dataSource := dataSources[getDataSourceUniqueName(airbyteMessage.Record.Namespace, airbyteMessage.Record.Stream)]
@@ -467,9 +467,9 @@ func getDataSourceUniqueName(namespace, streamName string) string {
 	return fmt.Sprintf("%s_%s", namespace, streamName)
 }
 
-func getAirbyteRawID(namespace, streamName string, recordIndex int) string {
+func getAirbyteRawID(namespace, streamName string, recordIndex int, emittedAt int64) string {
 	hash := sha256.New()
-	hash.Write([]byte(strings.Join([]string{namespace, streamName, strconv.Itoa(recordIndex)}, ":")))
+	hash.Write([]byte(strings.Join([]string{namespace, streamName, strconv.Itoa(recordIndex), strconv.FormatInt(emittedAt, 10)}, ":")))
 	hashBytes := hash.Sum(nil)
 
 	return hex.EncodeToString(hashBytes)
