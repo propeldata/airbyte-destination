@@ -212,7 +212,7 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 					resp, err := apiClient.FetchDeletionJob(ctx, deletionJob.ID)
 					if err != nil {
 						d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Fetch Deletion Job %q failed: %v", deletionJob.ID, err))
-						return nil, "", fmt.Errorf("failed to get Data Pool: %w", err)
+						return nil, "", fmt.Errorf("failed to get Deletion Job: %w", err)
 					}
 
 					return resp, resp.Status, nil
@@ -308,7 +308,8 @@ func (d *Destination) buildAndCreateDataSource(ctx context.Context, configuredSt
 		return nil, fmt.Errorf("no primary keys were found for Data Source %q", dataSourceUniqueName)
 	}
 
-	if (len(orderByColumns) == 0 && configuredStream.DestinationSyncMode == airbyte.DestinationSyncModeOverwrite) || configuredStream.DestinationSyncMode == airbyte.DestinationSyncModeAppend {
+	if configuredStream.DestinationSyncMode == airbyte.DestinationSyncModeAppend || cursorField == "" || len(orderByColumns) == 0 {
+		// Create Data Source that allows duplicates
 		createDataSourceOpts.Columns = append(createDataSourceOpts.Columns, defaultAirbyteColumns...)
 		createDataSourceOpts.Timestamp = ptr(airbyteExtractedAtColumn)
 		createDataSourceOpts.UniqueID = ptr(airbyteRawIdColumn)
@@ -316,20 +317,18 @@ func (d *Destination) buildAndCreateDataSource(ctx context.Context, configuredSt
 		return d.createDataSource(ctx, apiClient, createDataSourceOpts)
 	}
 
+	// Create deduplicating Data Source by ORDER BY and ver columns
+	createDataSourceOpts.UniqueID = ptr(orderByColumns[0])
 	createDataSourceOpts.TableSettings = &models.TableSettingsInput{
 		PrimaryKey:  []string{}, // these must be explicitly empty
 		PartitionBy: []string{},
 		OrderBy:     orderByColumns,
 		Engine: &models.TableEngineInput{
-			ReplacingMergeTree: &models.ReplacingMergeTree{Type: models.TableEngineReplacingMergeTree},
+			ReplacingMergeTree: &models.ReplacingMergeTree{
+				Type: models.TableEngineReplacingMergeTree,
+				Ver:  cursorField,
+			},
 		},
-	}
-
-	if cursorField == "" {
-		createDataSourceOpts.Columns = append(createDataSourceOpts.Columns, defaultAirbyteColumns[1])
-		createDataSourceOpts.TableSettings.Engine.ReplacingMergeTree.Ver = airbyteExtractedAtColumn
-	} else {
-		createDataSourceOpts.TableSettings.Engine.ReplacingMergeTree.Ver = cursorField
 	}
 
 	return d.createDataSource(ctx, apiClient, createDataSourceOpts)
@@ -364,6 +363,7 @@ func (d *Destination) createDataSource(ctx context.Context, apiClient PropelApiC
 
 	return dataSource, nil
 }
+
 func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSources map[string]*models.DataSource) error {
 	batchedRecordsPerDataSource := make(map[string][]map[string]any)
 	for dataSourceName := range dataSources {
@@ -400,8 +400,6 @@ func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSou
 
 			if dataSource.ConnectionSettings.WebhookConnectionSettings.UniqueID == airbyteRawIdColumn {
 				recordMap[airbyteRawIdColumn] = uuid.New().String()
-				recordMap[airbyteExtractedAtColumn] = airbyteMessage.Record.EmittedAt
-			} else if dataSource.ConnectionSettings.WebhookConnectionSettings.TableSettings.Engine.ReplacingMergeTreeTableEngine.Ver == airbyteExtractedAtColumn {
 				recordMap[airbyteExtractedAtColumn] = airbyteMessage.Record.EmittedAt
 			}
 
