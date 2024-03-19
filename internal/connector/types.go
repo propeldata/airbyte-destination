@@ -9,8 +9,6 @@ import (
 )
 
 func ConvertAirbyteTypeToPropelType(airbyteProperty airbyte.PropertyType) (models.PropelType, error) {
-	var propelType models.PropelType
-
 	if airbyteProperty.TypeSet == nil {
 		// if no general type is specified, default to string
 		return models.StringPropelType, nil
@@ -27,38 +25,28 @@ func ConvertAirbyteTypeToPropelType(airbyteProperty airbyte.PropertyType) (model
 		return models.StringPropelType, nil
 	}
 
-	for _, aType := range types {
-		switch aType {
-		case airbyte.String:
-			switch airbyteProperty.Format {
-			case airbyte.Date:
-				propelType = models.DatePropelType
-			case airbyte.DateTime:
-				switch airbyteProperty.AirbyteType {
-				case airbyte.TimestampWOTZ:
-					propelType = models.StringPropelType
-				default:
-					propelType = models.TimestampPropelType
-				}
-			case airbyte.Time:
-				propelType = models.StringPropelType
-			}
-
-			propelType = models.StringPropelType
-		case airbyte.Boolean:
-			propelType = models.BooleanPropelType
-		case airbyte.Number:
-			propelType = models.DoublePropelType
-		case airbyte.Integer:
-			propelType = models.Int64PropelType
-		case airbyte.Object, airbyte.Array:
-			propelType = models.JsonPropelType
-		default:
-			return models.PropelType{}, fmt.Errorf("airbyte type %s:%s:%s not supported", aType, airbyteProperty.Format, airbyteProperty.AirbyteType)
+	switch types[0] {
+	case airbyte.String:
+		switch airbyteProperty.Format {
+		case airbyte.Date:
+			return models.DatePropelType, nil
+		case airbyte.DateTime:
+			return models.TimestampPropelType, nil
+		case airbyte.Time:
+			return models.StringPropelType, nil
 		}
+		return models.StringPropelType, nil
+	case airbyte.Boolean:
+		return models.BooleanPropelType, nil
+	case airbyte.Number:
+		return models.DoublePropelType, nil
+	case airbyte.Integer:
+		return models.Int64PropelType, nil
+	case airbyte.Object, airbyte.Array:
+		return models.JsonPropelType, nil
+	default:
+		return models.PropelType{}, fmt.Errorf("airbyte type %s:%s:%s not supported", types[0], airbyteProperty.Format, airbyteProperty.AirbyteType)
 	}
-
-	return propelType, nil
 }
 
 func removeNullType(input []airbyte.PropType) []airbyte.PropType {
