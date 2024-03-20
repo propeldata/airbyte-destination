@@ -13,6 +13,7 @@ func TestConvertAirbyteTypeToPropelType(t *testing.T) {
 	tests := []struct {
 		name               string
 		propTypes          []airbyte.PropType
+		format             airbyte.FormatType
 		expectedPropelType models.PropelType
 		expectedError      string
 	}{
@@ -26,6 +27,13 @@ func TestConvertAirbyteTypeToPropelType(t *testing.T) {
 			name:               "Multiple types",
 			propTypes:          []airbyte.PropType{airbyte.Null, airbyte.Object, airbyte.Integer},
 			expectedPropelType: models.StringPropelType,
+			expectedError:      "",
+		},
+		{
+			name:               "Date type",
+			propTypes:          []airbyte.PropType{airbyte.Null, airbyte.String},
+			format:             airbyte.DateTime,
+			expectedPropelType: models.TimestampPropelType,
 			expectedError:      "",
 		},
 		{
@@ -48,6 +56,7 @@ func TestConvertAirbyteTypeToPropelType(t *testing.T) {
 
 			propelType, err := ConvertAirbyteTypeToPropelType(airbyte.PropertyType{
 				TypeSet: &airbyte.PropTypes{Types: tt.propTypes},
+				Format:  tt.format,
 			})
 			a.Equal(tt.expectedPropelType, propelType)
 

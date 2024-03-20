@@ -27,7 +27,7 @@ func TestDestination_Spec(t *testing.T) {
 
 	spec := d.Spec()
 	c.Equal("https://propeldata.com/docs", spec.DocumentationURL)
-	c.Equal([]airbyte.DestinationSyncMode{"overwrite", "append"}, spec.SupportedDestinationSyncModes)
+	c.Equal([]airbyte.DestinationSyncMode{"overwrite", "append", "append_dedup"}, spec.SupportedDestinationSyncModes)
 }
 
 func TestDestination_Check(t *testing.T) {
@@ -144,7 +144,6 @@ func TestDestination_Write(t *testing.T) {
 			inputDataPath:    inputDataPath,
 			mockWebhookError: errors.New("mock webhook error"),
 			expectedLogs: []string{
-				"Reading data for Data Source",
 				"failed to publish 2 events to url:",
 			},
 			expectedError: "publish batch failed after state",
@@ -159,7 +158,6 @@ func TestDestination_Write(t *testing.T) {
 				"airlines state 2",
 				"airlines state 3",
 				"Max batch size reached",
-				"Reading data for Data Source",
 				`Deletion Job \"DPJ1234567890\" succeeded`,
 			},
 		},
@@ -195,6 +193,51 @@ func TestDestination_Write(t *testing.T) {
 			for _, log := range tt.expectedLogs {
 				a.Contains(logsOutput, log)
 			}
+		})
+	}
+}
+
+func TestGetAirbyteRawID(t *testing.T) {
+	tests := []struct {
+		name        string
+		namespace   string
+		streamName  string
+		recordIndex int
+		emittedAt   int64
+		expectedID  string
+	}{
+		{
+			name:        "No types",
+			namespace:   "namespace",
+			streamName:  "stream",
+			recordIndex: 1,
+			emittedAt:   int64(123456789),
+			expectedID:  "64835b23-1e43-d091-c9b0-de411c0d4364",
+		},
+		{
+			name:        "No types",
+			namespace:   "namespace",
+			streamName:  "stream",
+			recordIndex: 2,
+			emittedAt:   int64(123456789),
+			expectedID:  "8b7e81a5-412e-3f3e-f045-bc0c440bdc02",
+		},
+		{
+			name:        "No types",
+			namespace:   "namespace",
+			streamName:  "stream",
+			recordIndex: 1,
+			emittedAt:   int64(1323456789),
+			expectedID:  "245b33d5-9c69-cdfb-ae06-d1b753d62f1c",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(st *testing.T) {
+			a := assert.New(st)
+
+			id := getAirbyteRawID(tt.namespace, tt.streamName, tt.recordIndex, tt.emittedAt)
+			a.Equal(tt.expectedID, id)
 		})
 	}
 }
