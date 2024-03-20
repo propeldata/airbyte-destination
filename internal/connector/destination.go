@@ -478,10 +478,12 @@ func getDataSourceUniqueName(namespace, streamName string) string {
 
 func getAirbyteRawID(namespace, streamName string, recordIndex int, emittedAt int64) string {
 	hash := sha256.New()
-	hash.Write([]byte(strings.Join([]string{namespace, streamName, strconv.Itoa(recordIndex), strconv.FormatInt(emittedAt, 10)}, ":")))
+	hash.Write([]byte(strings.Join([]string{namespace, streamName, strconv.Itoa(recordIndex), strconv.FormatInt(emittedAt, 10)}, "\000")))
 	hashBytes := hash.Sum(nil)
+	hexString := hex.EncodeToString(hashBytes)
+	uuid := hexString[:8] + "-" + hexString[8:12] + "-" + hexString[12:16] + "-" + hexString[16:20] + "-" + hexString[20:32]
 
-	return hex.EncodeToString(hashBytes)
+	return uuid
 }
 
 func ptr[T any](value T) *T {
