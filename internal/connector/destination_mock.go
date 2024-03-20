@@ -175,11 +175,19 @@ func (ac *MockApiClient) FetchDataSource(_ context.Context, uniqueName string) (
 	}}
 }
 
+func (ac *MockApiClient) DeleteDataSource(_ context.Context, _ string) (string, error) {
+	return "DSO1234567", nil
+}
+
 func (ac *MockApiClient) FetchDataPool(_ context.Context, _ string) (*models.DataPool, error) {
 	return &models.DataPool{
 		ID:        "DPO1234567890",
 		Timestamp: models.Timestamp{ColumnName: airbyteExtractedAtColumn},
 	}, nil
+}
+
+func (ac *MockApiClient) DeleteDataPool(_ context.Context, _ string) (string, error) {
+	return "DPO1234567", nil
 }
 
 func (ac *MockApiClient) CreateDeletionJob(_ context.Context, _ string, _ []models.FilterInput) (*models.Job, error) {

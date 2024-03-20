@@ -19,7 +19,10 @@ type Config struct {
 	AppSecret string `json:"application_secret"`
 }
 
-const dataSourceUniqueName = "_airbyte_airlines"
+const (
+	overwriteDataSourceName = "_airbyte_overwrite"
+	dedupDataSourceName     = "_airbyte_dedup"
+)
 
 var config Config
 
@@ -48,23 +51,25 @@ func TestWrite(t *testing.T) {
 
 	apiClient := client.NewApiClient(oauthToken.AccessToken)
 
-	dataSource, err := apiClient.FetchDataSource(ctx, dataSourceUniqueName)
+	overwriteDS, err := apiClient.FetchDataSource(ctx, overwriteDataSourceName)
 	c.NoError(err)
-	c.Len(dataSource.ConnectionSettings.WebhookConnectionSettings.Columns, 4)
+	c.Len(overwriteDS.ConnectionSettings.WebhookConnectionSettings.Columns, 4)
+	c.Equal("_airbyte_raw_id", overwriteDS.ConnectionSettings.WebhookConnectionSettings.UniqueID)
+
+	dedupDS, err := apiClient.FetchDataSource(ctx, overwriteDataSourceName)
+	c.NoError(err)
+	c.Len(dedupDS.ConnectionSettings.WebhookConnectionSettings.Columns, 5)
+	c.Equal([]string{"id"}, dedupDS.ConnectionSettings.WebhookConnectionSettings.TableSettings.OrderBy)
+	c.Equal("updated_at", dedupDS.ConnectionSettings.WebhookConnectionSettings.TableSettings.Engine.ReplacingMergeTreeTableEngine.Ver)
 
 	_, err = client.WaitForState(client.StateChangeOps[models.DataGridResponse]{
 		Pending: []string{"0", "1", "2", "3", "4", "5", "6", "7"}, // Record count before all records are ingested
 		Target:  []string{"8"},                                    // Expected final record count
 		Refresh: func() (*models.DataGridResponse, string, error) {
 			dataGrid, err := apiClient.FetchDataGrid(ctx, models.DataGridInput{
-				DataPool: models.DataPoolInput{Name: dataSourceUniqueName},
+				DataPool: models.DataPoolInput{Name: overwriteDataSourceName},
 				Columns:  []string{"id", "name"},
-				TimeRange: &models.TimeRangeInput{
-					Relative: "LAST_N_DAYS",
-					N:        365,
-					Start:    time.Unix(1705379000, 0),
-					Stop:     time.Unix(1705379000, 0),
-				}})
+			})
 			c.NoError(err)
 
 			return dataGrid, strconv.Itoa(len(dataGrid.Rows)), nil
@@ -73,4 +78,25 @@ func TestWrite(t *testing.T) {
 		Delay:   30 * time.Second,
 	})
 	c.NoError(err)
+
+	dataGrid, err := client.WaitForState(client.StateChangeOps[models.DataGridResponse]{
+		Pending: []string{"0", "1"},
+		Target:  []string{"2"},
+		Refresh: func() (*models.DataGridResponse, string, error) {
+			dataGrid, err := apiClient.FetchDataGrid(ctx, models.DataGridInput{
+				DataPool: models.DataPoolInput{Name: dedupDataSourceName},
+				Columns:  []string{"id", "name"},
+			})
+			c.NoError(err)
+
+			return dataGrid, strconv.Itoa(len(dataGrid.Rows)), nil
+		},
+		Timeout: 5 * time.Minute,
+		Delay:   30 * time.Second,
+	})
+	c.NoError(err)
+	c.Equal("0", *dataGrid.Rows[0][0])
+	c.Equal("delta", *dataGrid.Rows[0][1])
+	c.Equal("1", *dataGrid.Rows[1][0])
+	c.Equal("aeromexico", *dataGrid.Rows[1][1])
 }

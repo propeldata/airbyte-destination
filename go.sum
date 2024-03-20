@@ -33,6 +33,8 @@ github.com/propeldata/go-client v0.0.0-20240212132900-b257c0be6b3f h1:ih63JIXIXa
 github.com/propeldata/go-client v0.0.0-20240212132900-b257c0be6b3f/go.mod h1:66MbzHOEKlqy8HDZpIeof8systvvO9Tg7e92lZWSrBw=
 github.com/propeldata/go-client v0.0.0-20240312131722-8eb995d265ee h1:C84YBBkah6VxitatvjLI6gd7KX0vARgrvoWOque+4dg=
 github.com/propeldata/go-client v0.0.0-20240312131722-8eb995d265ee/go.mod h1:66MbzHOEKlqy8HDZpIeof8systvvO9Tg7e92lZWSrBw=
+github.com/propeldata/go-client v0.0.0-20240319165123-1cfcf03faf4b h1:iB+GHl50WcrPiJrkTdokRhEdCnZtjO8dpzU+DkihU4s=
+github.com/propeldata/go-client v0.0.0-20240319165123-1cfcf03faf4b/go.mod h1:SnF0U3Ior97upM7kNxFpY2cG2wYg2jSlv8MM5B1chzE=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/sethvargo/go-password v0.2.0 h1:BTDl4CC/gjf/axHMaDQtw507ogrXLci6XRiLc7i/UHI=
 github.com/sethvargo/go-password v0.2.0/go.mod h1:Ym4Mr9JXLBycr02MFuVQ/0JHidNetSgbzutTr3zsYXE=

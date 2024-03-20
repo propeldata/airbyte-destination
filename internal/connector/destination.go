@@ -57,6 +57,8 @@ type PropelApiClient interface {
 	FetchDataPool(ctx context.Context, uniqueName string) (*models.DataPool, error)
 	CreateDeletionJob(ctx context.Context, dataPoolId string, filters []models.FilterInput) (*models.Job, error)
 	FetchDeletionJob(ctx context.Context, id string) (*models.Job, error)
+	DeleteDataPool(ctx context.Context, uniqueName string) (string, error)
+	DeleteDataSource(ctx context.Context, uniqueName string) (string, error)
 }
 
 type Destination struct {
@@ -174,10 +176,11 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 	}
 
 	apiClient := newApiClient(oauthToken.AccessToken)
-
 	dataSources := map[string]*models.DataSource{}
+	isFullReset := true
 
 	for _, configuredStream := range configuredCatalog.Streams {
+		isFullReset = isFullReset && configuredStream.DestinationSyncMode == airbyte.DestinationSyncModeOverwrite
 		dataSourceUniqueName := getDataSourceUniqueName(configuredStream.Stream.Namespace, configuredStream.Stream.Name)
 
 		dataSource, fetchDataSourceErr := apiClient.FetchDataSource(ctx, dataSourceUniqueName)
@@ -199,7 +202,7 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 			}
 
 			deletionJob, err := apiClient.CreateDeletionJob(ctx, dataPool.ID, []models.FilterInput{{
-				Column:   "_propel_received_at",
+				Column:   airbyteExtractedAtColumn,
 				Operator: "LESS_THAN_OR_EQUAL_TO",
 				Value:    ptr(time.Now().UTC().Format(time.RFC3339Nano)),
 			}})
@@ -250,8 +253,17 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 		}
 	}
 
-	if err := d.writeRecords(ctx, input, dataSources); err != nil {
+	recordsWritten, err := d.writeRecords(ctx, input, dataSources)
+	if err != nil {
 		return err
+	}
+
+	if isFullReset && recordsWritten == 0 {
+		// Full reset syncs occur when a sync mode is changed for an existing stream in a connector.
+		// Data Sources must then be removed, so they can later be created with the appropriate ORDER BY statement.
+		// This type of syncs set all stream sync modes as "overwrite" and write no records.
+		d.logger.Log(airbyte.LogLevelInfo, fmt.Sprintf("Full reset sync, all Data Pools will be deleted."))
+		return deleteAllDataSources(ctx, apiClient, dataSources)
 	}
 
 	return nil
@@ -319,7 +331,7 @@ func (d *Destination) buildAndCreateDataSource(ctx context.Context, configuredSt
 		return d.createDataSource(ctx, apiClient, createDataSourceOpts)
 	}
 
-	// Create deduplicating Data Source by ORDER BY and ver columns
+	// Create de-duplicating Data Source by ORDER BY and ver columns
 	createDataSourceOpts.UniqueID = ptr(orderByColumns[0])
 	createDataSourceOpts.TableSettings = &models.TableSettingsInput{
 		PrimaryKey:  []string{}, // these must be explicitly empty
@@ -366,21 +378,19 @@ func (d *Destination) createDataSource(ctx context.Context, apiClient PropelApiC
 	return dataSource, nil
 }
 
-func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSources map[string]*models.DataSource) error {
+func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSources map[string]*models.DataSource) (int, error) {
 	batchedRecordsPerDataSource := make(map[string][]map[string]any)
 	for dataSourceName := range dataSources {
 		batchedRecordsPerDataSource[dataSourceName] = make([]map[string]any, 0, maxRecordsBatchSize)
 	}
 
-	i := 0
+	recordIndex := 0
 	scanner := bufio.NewScanner(input)
 	for scanner.Scan() {
-		fmt.Println("⭐⭐⭐⭐⭐️ ENTERED SCAN ⭐⭐⭐⭐⭐", i)
-
 		var airbyteMessage airbyte.Message
 		if err := json.Unmarshal(scanner.Bytes(), &airbyteMessage); err != nil {
 			d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Failed to parse record: %v", err))
-			return fmt.Errorf("failed to parse record: %w", err)
+			return recordIndex, fmt.Errorf("failed to parse record: %w", err)
 		}
 
 		switch airbyteMessage.Type {
@@ -392,7 +402,7 @@ func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSou
 					AuthPassword: dataSource.ConnectionSettings.WebhookConnectionSettings.BasicAuth.Password,
 				}
 				if err := d.publishBatch(ctx, dataSource, eventsInput, batchedRecordsPerDataSource[dataSourceName]); err != nil {
-					return fmt.Errorf("publish batch failed after state message for Data Source %q: %w", dataSource.ID, err)
+					return recordIndex, fmt.Errorf("publish batch failed after state message for Data Source %q: %w", dataSource.ID, err)
 				}
 
 				batchedRecordsPerDataSource[dataSourceName] = batchedRecordsPerDataSource[dataSourceName][:0]
@@ -401,7 +411,7 @@ func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSou
 			d.logger.State(airbyteMessage.State)
 		case airbyte.MessageTypeRecord:
 			recordMap := airbyteMessage.Record.Data
-			recordMap[airbyteRawIdColumn] = getAirbyteRawID(airbyteMessage.Record.Namespace, airbyteMessage.Record.Stream, i, airbyteMessage.Record.EmittedAt)
+			recordMap[airbyteRawIdColumn] = getAirbyteRawID(airbyteMessage.Record.Namespace, airbyteMessage.Record.Stream, recordIndex, airbyteMessage.Record.EmittedAt)
 			recordMap[airbyteExtractedAtColumn] = airbyteMessage.Record.EmittedAt
 
 			dataSource := dataSources[getDataSourceUniqueName(airbyteMessage.Record.Namespace, airbyteMessage.Record.Stream)]
@@ -414,16 +424,15 @@ func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSou
 
 				d.logger.Log(airbyte.LogLevelDebug, fmt.Sprintf("Max batch size reached for Data Source %q", dataSource.ID))
 				if err := d.publishBatch(ctx, dataSource, eventsInput, batchedRecordsPerDataSource[dataSource.UniqueName]); err != nil {
-					return fmt.Errorf("publish batch failed after max batch size was reached for Data Source %q: %w", dataSource.ID, err)
+					return recordIndex, fmt.Errorf("publish batch failed after max batch size was reached for Data Source %q: %w", dataSource.ID, err)
 				}
 
 				batchedRecordsPerDataSource[dataSource.UniqueName] = batchedRecordsPerDataSource[dataSource.UniqueName][:0]
 			}
 
 			batchedRecordsPerDataSource[dataSource.UniqueName] = append(batchedRecordsPerDataSource[dataSource.UniqueName], recordMap)
+			recordIndex++
 		}
-
-		i++
 	}
 
 	for dataSourceName, dataSource := range dataSources {
@@ -434,11 +443,11 @@ func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSou
 		}
 
 		if err := d.publishBatch(ctx, dataSource, eventsInput, batchedRecordsPerDataSource[dataSourceName]); err != nil {
-			return fmt.Errorf("publish batch failed for remaining records in Data Source %q: %w", dataSource.ID, err)
+			return recordIndex, fmt.Errorf("publish batch failed for remaining records in Data Source %q: %w", dataSource.ID, err)
 		}
 	}
 
-	return nil
+	return recordIndex, nil
 }
 
 func (d *Destination) publishBatch(ctx context.Context, dataSource *models.DataSource, eventsInput *client.PostEventsInput, events []map[string]any) error {
@@ -477,4 +486,64 @@ func getAirbyteRawID(namespace, streamName string, recordIndex int, emittedAt in
 
 func ptr[T any](value T) *T {
 	return &value
+}
+
+func deleteAllDataSources(ctx context.Context, apiClient PropelApiClient, dataSources map[string]*models.DataSource) error {
+	for dataSourceName := range dataSources {
+		if _, err := apiClient.DeleteDataPool(ctx, dataSourceName); err != nil {
+			return fmt.Errorf("failed to delete Data Pool %q: %w", dataSourceName, err)
+		}
+	}
+
+	for dataSourceName := range dataSources {
+		if _, err := client.WaitForState(client.StateChangeOps[models.DataPool]{
+			Pending: []string{"DELETING"},
+			Target:  []string{"DELETED"},
+			Refresh: func() (*models.DataPool, string, error) {
+				resp, err := apiClient.FetchDataPool(ctx, dataSourceName)
+				if err != nil {
+					if client.NotFoundError("Data Pool", err) {
+						return nil, "DELETED", nil
+					}
+
+					return nil, "", fmt.Errorf("failed to get Data Pool: %w", err)
+				}
+
+				return resp, resp.Status, nil
+			},
+			Timeout: 20 * time.Minute,
+			Delay:   3 * time.Second,
+		}); err != nil {
+			return fmt.Errorf(`transition to "DELETED" failed for Data Pool %q: %w`, dataSourceName, err)
+		}
+
+		if _, err := apiClient.DeleteDataSource(ctx, "_comments"); err != nil {
+			return fmt.Errorf("failed to delete Data Source %q: %w", dataSourceName, err)
+		}
+	}
+
+	for dataSourceName := range dataSources {
+		if _, err := client.WaitForState(client.StateChangeOps[models.DataSource]{
+			Pending: []string{"DELETING"},
+			Target:  []string{"DELETED"},
+			Refresh: func() (*models.DataSource, string, error) {
+				resp, err := apiClient.FetchDataSource(ctx, dataSourceName)
+				if err != nil {
+					if client.NotFoundError("Data Source", err) {
+						return nil, "DELETED", nil
+					}
+
+					return nil, "", fmt.Errorf("failed to get Data Source: %w", err)
+				}
+
+				return resp, resp.Status, nil
+			},
+			Timeout: 20 * time.Minute,
+			Delay:   3 * time.Second,
+		}); err != nil {
+			return fmt.Errorf(`transition to "DELETED" failed for Data Source %q: %w`, dataSourceName, err)
+		}
+	}
+
+	return nil
 }
