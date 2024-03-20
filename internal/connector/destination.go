@@ -415,6 +415,8 @@ func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSou
 			recordMap[airbyteExtractedAtColumn] = airbyteMessage.Record.EmittedAt
 
 			dataSource := dataSources[getDataSourceUniqueName(airbyteMessage.Record.Namespace, airbyteMessage.Record.Stream)]
+			fmt.Println("data source unique name is...")
+			fmt.Println(getDataSourceUniqueName(airbyteMessage.Record.Namespace, airbyteMessage.Record.Stream))
 			if len(batchedRecordsPerDataSource[dataSource.UniqueName]) == maxRecordsBatchSize {
 				eventsInput := &client.PostEventsInput{
 					WebhookURL:   dataSource.ConnectionSettings.WebhookConnectionSettings.WebhookURL,
