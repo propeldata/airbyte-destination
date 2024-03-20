@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -37,7 +38,11 @@ func TestMain(m *testing.M) {
 		log.Fatalf("unmarshal failed: %v", err)
 	}
 
-	os.Exit(m.Run())
+	code := m.Run()
+
+	cleanup()
+
+	os.Exit(code)
 }
 
 func TestWrite(t *testing.T) {
@@ -99,4 +104,66 @@ func TestWrite(t *testing.T) {
 	c.Equal("delta", *dataGrid.Rows[0][1])
 	c.Equal("1", *dataGrid.Rows[1][0])
 	c.Equal("aeromexico", *dataGrid.Rows[1][1])
+}
+
+func cleanup() {
+	ctx := context.Background()
+	oauthClient := client.NewOauthClient()
+
+	oauthToken, err := oauthClient.OAuthToken(ctx, config.AppId, config.AppSecret)
+	if err != nil {
+		log.Fatalf("invalid configuration: %v", err)
+	}
+
+	apiClient := client.NewApiClient(oauthToken.AccessToken)
+
+	if _, err := apiClient.DeleteDataPool(ctx, dedupDataSourceName); err != nil {
+		log.Fatalf("delete Data Pool failed: %v", err)
+	}
+
+	if _, err := client.WaitForState(client.StateChangeOps[models.DataPool]{
+		Pending: []string{"DELETING"},
+		Target:  []string{"DELETED"},
+		Refresh: func() (*models.DataPool, string, error) {
+			resp, err := apiClient.FetchDataPool(ctx, dedupDataSourceName)
+			if err != nil {
+				if client.NotFoundError("Data Pool", err) {
+					return nil, "DELETED", nil
+				}
+
+				return nil, "", fmt.Errorf("failed to get Data Pool: %w", err)
+			}
+
+			return resp, resp.Status, nil
+		},
+		Timeout: 20 * time.Minute,
+		Delay:   3 * time.Second,
+	}); err != nil {
+		log.Fatalf("deleted Data Pool status transition failed: %v", err)
+	}
+
+	if _, err := apiClient.DeleteDataSource(ctx, dedupDataSourceName); err != nil {
+		log.Fatalf("delete Data Source failed: %v", err)
+	}
+
+	if _, err := client.WaitForState(client.StateChangeOps[models.DataSource]{
+		Pending: []string{"DELETING"},
+		Target:  []string{"DELETED"},
+		Refresh: func() (*models.DataSource, string, error) {
+			resp, err := apiClient.FetchDataSource(ctx, dedupDataSourceName)
+			if err != nil {
+				if client.NotFoundError("Data Source", err) {
+					return nil, "DELETED", nil
+				}
+
+				return nil, "", fmt.Errorf("failed to get Data Source: %w", err)
+			}
+
+			return resp, resp.Status, nil
+		},
+		Timeout: 20 * time.Minute,
+		Delay:   3 * time.Second,
+	}); err != nil {
+		log.Fatalf("deleted Data Source status transition failed: %v", err)
+	}
 }
