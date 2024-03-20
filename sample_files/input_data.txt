@@ -4,7 +4,7 @@
 {"type": "RECORD", "record": { "stream": "airbyte_overwrite", "emitted_at": 1705379714, "data": {"id": 3,"name": "delta"}}}
 {"type": "RECORD", "record": { "stream": "airbyte_dedup", "emitted_at": 1705379707, "data": {"id": 0, "name": "delta", "updated_at": "2024-03-19T18:05:49.000Z"}}}
 {"type": "RECORD", "record": { "stream": "airbyte_overwrite", "emitted_at": 1705379713, "data": {"id": 4,"name": "american airlines"}}}
-{"type": "RECORD", "record": { "stream": "airbyte_airlines", "emitted_at": 1705379712, "data": {"id": 5,"name": "qatar airways"}}}
+{"type": "RECORD", "record": { "stream": "airbyte_overwrite", "emitted_at": 1705379712, "data": {"id": 5,"name": "qatar airways"}}}
 {"type": "STATE", "state": {"state_type": "STREAM", "stream": {"stream_descriptor": {"name":"airbyte_overwrite"}}}}
 {"type": "RECORD", "record": { "stream": "airbyte_overwrite", "emitted_at": 1705379711, "data": {"id": 6,"name": "latam"}}}
 {"type": "RECORD", "record": { "stream": "airbyte_overwrite", "emitted_at": 1705379710, "data": {"id": 7,"name": "vivaerobus"}}}
