@@ -56,7 +56,7 @@ func TestWrite(t *testing.T) {
 	c.Len(overwriteDS.ConnectionSettings.WebhookConnectionSettings.Columns, 4)
 	c.Equal("_airbyte_raw_id", overwriteDS.ConnectionSettings.WebhookConnectionSettings.UniqueID)
 
-	dedupDS, err := apiClient.FetchDataSource(ctx, overwriteDataSourceName)
+	dedupDS, err := apiClient.FetchDataSource(ctx, dedupDataSourceName)
 	c.NoError(err)
 	c.Len(dedupDS.ConnectionSettings.WebhookConnectionSettings.Columns, 5)
 	c.Equal([]string{"id"}, dedupDS.ConnectionSettings.WebhookConnectionSettings.TableSettings.OrderBy)
