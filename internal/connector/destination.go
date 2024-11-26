@@ -26,7 +26,7 @@ const (
 )
 
 var (
-	maxRecordsBatchSize   = 300
+	maxBytesPerBatch      = 1_047_000 // less than 1 MiB
 	defaultAirbyteColumns = []*models.WebhookDataSourceColumnInput{
 		{
 			Name:         airbyteRawIdColumn,
@@ -379,9 +379,12 @@ func (d *Destination) createDataSource(ctx context.Context, apiClient PropelApiC
 }
 
 func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSources map[string]*models.DataSource) (int, error) {
+	batchByteSizePerDataSource := make(map[string]int, len(dataSources))
+
 	batchedRecordsPerDataSource := make(map[string][]map[string]any)
 	for dataSourceName := range dataSources {
-		batchedRecordsPerDataSource[dataSourceName] = make([]map[string]any, 0, maxRecordsBatchSize)
+		batchedRecordsPerDataSource[dataSourceName] = make([]map[string]any, 0)
+		batchByteSizePerDataSource[dataSourceName] = 0
 	}
 
 	recordIndex := 0
@@ -415,7 +418,15 @@ func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSou
 			recordMap[airbyteExtractedAtColumn] = airbyteMessage.Record.EmittedAt
 
 			dataSource := dataSources[getDataSourceUniqueName(airbyteMessage.Record.Namespace, airbyteMessage.Record.Stream)]
-			if len(batchedRecordsPerDataSource[dataSource.UniqueName]) == maxRecordsBatchSize {
+
+			recordJsonEncoded, err := json.Marshal(recordMap)
+			if err != nil {
+				return recordIndex, fmt.Errorf("failed to encode record for Data Source %q: %w", dataSource.ID, err)
+			}
+
+			recordJsonBytesSize := len(recordJsonEncoded) + 1
+
+			if batchByteSizePerDataSource[dataSource.UniqueName]+recordJsonBytesSize > maxBytesPerBatch {
 				eventsInput := &client.PostEventsInput{
 					WebhookURL:   dataSource.ConnectionSettings.WebhookConnectionSettings.WebhookURL,
 					AuthUsername: dataSource.ConnectionSettings.WebhookConnectionSettings.BasicAuth.Username,
@@ -428,9 +439,11 @@ func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSou
 				}
 
 				batchedRecordsPerDataSource[dataSource.UniqueName] = batchedRecordsPerDataSource[dataSource.UniqueName][:0]
+				batchByteSizePerDataSource[dataSource.UniqueName] = 0
 			}
 
 			batchedRecordsPerDataSource[dataSource.UniqueName] = append(batchedRecordsPerDataSource[dataSource.UniqueName], recordMap)
+			batchByteSizePerDataSource[dataSource.UniqueName] += recordJsonBytesSize
 			recordIndex++
 		}
 	}
