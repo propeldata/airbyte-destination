@@ -26,7 +26,7 @@ const (
 )
 
 var (
-	maxBytesPerBatch      = 1 << 20 // 1 MiB
+	maxBytesPerBatch      = 1_047_000 // less than 1 MiB
 	defaultAirbyteColumns = []*models.WebhookDataSourceColumnInput{
 		{
 			Name:         airbyteRawIdColumn,
