@@ -163,11 +163,12 @@ func TestDestination_Write(t *testing.T) {
 		},
 	}
 
+	maxBytesPerBatch = 2_500
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(st *testing.T) {
 			a := assert.New(st)
 
-			maxRecordsBatchSize = 10
 			mockOAuthError, mockWebhookError, mockApiError = tt.mockOAuthError, tt.mockWebhookError, tt.mockApiError
 			st.Cleanup(func() { mockOAuthError, mockWebhookError, mockApiError = nil, nil, nil })
 
