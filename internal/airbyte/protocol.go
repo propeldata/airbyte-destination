@@ -99,10 +99,12 @@ const (
 
 // State is used to store data between syncs - useful for incremental syncs and state storage
 type State struct {
-	Type   StateType      `json:"state_type"`
-	Data   any            `json:"data"`
-	Stream map[string]any `json:"stream"`
-	Global map[string]any `json:"global"`
+	Type             StateType      `json:"type"`
+	Data             any            `json:"data"`
+	Stream           map[string]any `json:"stream"`
+	Global           map[string]any `json:"global"`
+	SourceStats      StateStats     `json:"sourceStats,omitempty"`
+	DestinationStats StateStats     `json:"destinationStats,omitempty"`
 }
 
 // SyncMode defines the modes that your source is able to sync in
@@ -245,4 +247,9 @@ type Record struct {
 	Stream    string         `json:"stream"`
 	Data      map[string]any `json:"data"`
 	EmittedAt int64          `json:"emitted_at"`
+}
+
+// StateStats to emit checkpoints while replicating data
+type StateStats struct {
+	RecordCount float64 `json:"recordCount"`
 }
