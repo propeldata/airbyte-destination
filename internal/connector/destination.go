@@ -27,6 +27,7 @@ const (
 
 var (
 	maxBytesPerBatch      = 1_047_000 // less than 1 MiB
+	maxRecordsBatchSize   = 500
 	defaultAirbyteColumns = []*models.WebhookDataSourceColumnInput{
 		{
 			Name:         airbyteRawIdColumn,
@@ -426,7 +427,7 @@ func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSou
 
 			recordJsonBytesSize := len(recordJsonEncoded) + 1
 
-			if batchByteSizePerDataSource[dataSource.UniqueName]+recordJsonBytesSize > maxBytesPerBatch {
+			if batchByteSizePerDataSource[dataSource.UniqueName]+recordJsonBytesSize > maxBytesPerBatch || len(batchedRecordsPerDataSource[dataSource.UniqueName]) == maxRecordsBatchSize {
 				eventsInput := &client.PostEventsInput{
 					WebhookURL:   dataSource.ConnectionSettings.WebhookConnectionSettings.WebhookURL,
 					AuthUsername: dataSource.ConnectionSettings.WebhookConnectionSettings.BasicAuth.Username,

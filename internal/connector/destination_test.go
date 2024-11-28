@@ -92,15 +92,17 @@ func TestDestination_Check(t *testing.T) {
 
 func TestDestination_Write(t *testing.T) {
 	tests := []struct {
-		name             string
-		configPath       string
-		catalogPath      string
-		inputDataPath    string
-		expectedLogs     []string
-		mockOAuthError   error
-		mockWebhookError error
-		mockApiError     error
-		expectedError    string
+		name                string
+		configPath          string
+		catalogPath         string
+		inputDataPath       string
+		expectedLogs        []string
+		maxBytesPerBatch    int
+		maxRecordsBatchSize int
+		mockOAuthError      error
+		mockWebhookError    error
+		mockApiError        error
+		expectedError       string
 	}{
 		{
 			name:          "Invalid config path",
@@ -149,10 +151,27 @@ func TestDestination_Write(t *testing.T) {
 			expectedError: "publish batch failed after state",
 		},
 		{
-			name:          "Successful write",
-			configPath:    configPath,
-			catalogPath:   catalogPath,
-			inputDataPath: inputDataPath,
+			name:                "Successful write - batch per number of records",
+			configPath:          configPath,
+			catalogPath:         catalogPath,
+			inputDataPath:       inputDataPath,
+			maxRecordsBatchSize: 10,
+			maxBytesPerBatch:    maxBytesPerBatch,
+			expectedLogs: []string{
+				"airlines state 1",
+				"airlines state 2",
+				"airlines state 3",
+				"Max batch size reached",
+				`Deletion Job \"DPJ1234567890\" succeeded`,
+			},
+		},
+		{
+			name:                "Successful write - batch per number of bytes",
+			configPath:          configPath,
+			catalogPath:         catalogPath,
+			inputDataPath:       inputDataPath,
+			maxRecordsBatchSize: maxRecordsBatchSize,
+			maxBytesPerBatch:    2_500,
 			expectedLogs: []string{
 				"airlines state 1",
 				"airlines state 2",
@@ -163,11 +182,17 @@ func TestDestination_Write(t *testing.T) {
 		},
 	}
 
-	maxBytesPerBatch = 2_500
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(st *testing.T) {
 			a := assert.New(st)
+
+			if tt.maxBytesPerBatch > 0 {
+				maxBytesPerBatch = tt.maxBytesPerBatch
+			}
+
+			if tt.maxRecordsBatchSize > 0 {
+				maxRecordsBatchSize = tt.maxRecordsBatchSize
+			}
 
 			mockOAuthError, mockWebhookError, mockApiError = tt.mockOAuthError, tt.mockWebhookError, tt.mockApiError
 			st.Cleanup(func() { mockOAuthError, mockWebhookError, mockApiError = nil, nil, nil })
