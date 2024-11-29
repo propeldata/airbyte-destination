@@ -399,6 +399,7 @@ func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSou
 
 		switch airbyteMessage.Type {
 		case airbyte.MessageTypeState:
+			d.logger.Log(airbyte.LogLevelInfo, fmt.Sprintf("Received a state message %v", airbyteMessage))
 			for dataSourceName, dataSource := range dataSources {
 				eventsInput := &client.PostEventsInput{
 					WebhookURL:   dataSource.ConnectionSettings.WebhookConnectionSettings.WebhookURL,

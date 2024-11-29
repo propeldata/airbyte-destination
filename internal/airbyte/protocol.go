@@ -100,11 +100,11 @@ const (
 // State is used to store data between syncs - useful for incremental syncs and state storage
 type State struct {
 	Type             StateType      `json:"state_type"`
-	Data             any            `json:"data,omitempty"`
-	Stream           map[string]any `json:"stream,omitempty"`
-	Global           map[string]any `json:"global,omitempty"`
-	SourceStats      StateStats     `json:"sourceStats,omitempty"`
-	DestinationStats StateStats     `json:"destinationStats,omitempty"`
+	Data             any            `json:"data"`
+	Stream           map[string]any `json:"stream"`
+	Global           map[string]any `json:"global"`
+	SourceStats      StateStats     `json:"sourceStats"`
+	DestinationStats StateStats     `json:"destinationStats"`
 }
 
 // SyncMode defines the modes that your source is able to sync in
