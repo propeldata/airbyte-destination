@@ -271,6 +271,8 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 }
 
 func (d *Destination) buildAndCreateDataSource(ctx context.Context, configuredStream airbyte.ConfiguredStream, dataSourceUniqueName string, apiClient PropelApiClient) (*models.DataSource, error) {
+	d.logger.Log(airbyte.LogLevelInfo, fmt.Sprintf("ConfiguredStream PrimaryKey: %v CursorField: %v DestinationSyncMode: %v", configuredStream.PrimaryKey, configuredStream.CursorField, configuredStream.DestinationSyncMode))
+
 	// Generates a password of 18 chars length with 2 digits, 2 symbols and uppercase letters.
 	authPassword, err := password.Generate(18, 2, 2, false, false)
 	if err != nil {
@@ -288,7 +290,7 @@ func (d *Destination) buildAndCreateDataSource(ctx context.Context, configuredSt
 		orderByColumns = append(orderByColumns, pk[0])
 	}
 
-	var cursorField string
+	cursorField := airbyteExtractedAtColumn
 	if len(configuredStream.CursorField) > 0 {
 		cursorField = configuredStream.CursorField[0]
 	}
@@ -324,7 +326,7 @@ func (d *Destination) buildAndCreateDataSource(ctx context.Context, configuredSt
 		return nil, fmt.Errorf("no primary keys were found for Data Source %q", dataSourceUniqueName)
 	}
 
-	if configuredStream.DestinationSyncMode == airbyte.DestinationSyncModeAppend || cursorField == "" || len(orderByColumns) == 0 {
+	if configuredStream.DestinationSyncMode == airbyte.DestinationSyncModeAppend || len(orderByColumns) == 0 {
 		// Create Data Source that allows duplicates
 		createDataSourceOpts.Timestamp = ptr(airbyteExtractedAtColumn)
 		createDataSourceOpts.UniqueID = ptr(airbyteRawIdColumn)
