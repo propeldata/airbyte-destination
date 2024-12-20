@@ -279,6 +279,7 @@ func (d *Destination) buildAndCreateDataSource(ctx context.Context, configuredSt
 	}
 
 	orderByColumns := make([]string, 0, len(configuredStream.PrimaryKey))
+	d.logger.Log(airbyte.LogLevelInfo, fmt.Sprintf("PrimaryKey %v", configuredStream.PrimaryKey))
 	for _, pk := range configuredStream.PrimaryKey {
 		if len(pk) != 1 {
 			d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Unexpected primary key length %d for Data Source %q", len(pk), dataSourceUniqueName))
@@ -292,6 +293,9 @@ func (d *Destination) buildAndCreateDataSource(ctx context.Context, configuredSt
 	if len(configuredStream.CursorField) > 0 {
 		cursorField = configuredStream.CursorField[0]
 	}
+
+	d.logger.Log(airbyte.LogLevelInfo, fmt.Sprintf("cursorField %v", configuredStream.CursorField))
+	d.logger.Log(airbyte.LogLevelInfo, fmt.Sprintf("configuredStream.DestinationSyncMode %v", configuredStream.DestinationSyncMode))
 
 	columns := make([]*models.WebhookDataSourceColumnInput, 0, len(configuredStream.Stream.JSONSchema.Properties)+len(defaultAirbyteColumns))
 
