@@ -170,7 +170,7 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 		return fmt.Errorf("configured catalog is invalid. Unable to parse it %w", err)
 	}
 
-	oauthToken, err := d.oauthClient.OAuthToken(context.Background(), dstCfg.ApplicationID, dstCfg.ApplicationSecret)
+	oauthToken, err := d.oauthClient.OAuthToken(ctx, dstCfg.ApplicationID, dstCfg.ApplicationSecret)
 	if err != nil {
 		d.logger.Log(airbyte.LogLevelError, fmt.Sprintf("Access token request failed: %v", err))
 		return fmt.Errorf("generating a Propel access token failed: %w", err)
@@ -271,7 +271,7 @@ func (d *Destination) Write(ctx context.Context, dstCfgPath string, cfgCatalogPa
 }
 
 func (d *Destination) buildAndCreateDataSource(ctx context.Context, configuredStream airbyte.ConfiguredStream, dataSourceUniqueName string, apiClient PropelApiClient) (*models.DataSource, error) {
-	d.logger.Log(airbyte.LogLevelInfo, fmt.Sprintf("ConfiguredStream PrimaryKey: %v CursorField: %v DestinationSyncMode: %v", configuredStream.PrimaryKey, configuredStream.CursorField, configuredStream.DestinationSyncMode))
+	d.logger.Log(airbyte.LogLevelInfo, fmt.Sprintf("ConfiguredStream PrimaryKey: %v CursorField: %v DestinationSyncMode: %v, SourceDefinedCursor: %v, DefaultCursorField: %v", configuredStream.PrimaryKey, configuredStream.CursorField, configuredStream.DestinationSyncMode, configuredStream.Stream.SourceDefinedCursor, configuredStream.Stream.DefaultCursorField))
 
 	// Generates a password of 18 chars length with 2 digits, 2 symbols and uppercase letters.
 	authPassword, err := password.Generate(18, 2, 2, false, false)
@@ -413,6 +413,9 @@ func (d *Destination) writeRecords(ctx context.Context, input io.Reader, dataSou
 
 				batchedRecordsPerDataSource[dataSourceName] = batchedRecordsPerDataSource[dataSourceName][:0]
 			}
+
+			stateMessage := airbyteMessage.State
+			stateMessage.DestinationStats.RecordCount = stateMessage.SourceStats.RecordCount
 
 			d.logger.State(airbyteMessage.State)
 		case airbyte.MessageTypeRecord:

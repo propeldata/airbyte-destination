@@ -97,12 +97,18 @@ const (
 	StateTypeLegacy StateType = "LEGACY"
 )
 
+type StreamState struct {
+	StreamDescriptor map[string]string `json:"stream_descriptor"`
+	StreamState      map[string]any    `json:"stream_state,omitempty"`
+}
+
 // State is used to store data between syncs - useful for incremental syncs and state storage
 type State struct {
-	Type             StateType      `json:"state_type"`
+	StateType        StateType      `json:"state_type"` // Legacy field
+	Type             StateType      `json:"type"`
 	ID               int            `json:"id,omitempty"`
-	Data             any            `json:"data,omitempty"`
-	Stream           map[string]any `json:"stream,omitempty"`
+	Data             any            `json:"data,omitempty"` // Legacy field
+	Stream           StreamState    `json:"stream,omitempty"`
 	Global           map[string]any `json:"global,omitempty"`
 	SourceStats      StateStats     `json:"sourceStats,omitempty"`
 	DestinationStats StateStats     `json:"destinationStats,omitempty"`
@@ -219,6 +225,7 @@ type Stream struct {
 	DefaultCursorField      []string   `json:"default_cursor_field,omitempty"`
 	SourceDefinedPrimaryKey [][]string `json:"source_defined_primary_key,omitempty"`
 	Namespace               string     `json:"namespace"`
+	IsResumable             bool       `json:"is_resumable"`
 }
 
 // Catalog defines the complete available schema you can sync with a source
