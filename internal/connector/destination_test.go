@@ -135,7 +135,7 @@ func TestDestination_Write(t *testing.T) {
 			catalogPath:   catalogPath,
 			inputDataPath: inputDataPath,
 			mockApiError:  errors.New("mock API error"),
-			expectedLogs:  []string{`"level":"ERROR","message":"Fetch Data Source \"_airlines\" failed:`},
+			expectedLogs:  []string{`"level":"ERROR","message":"Fetch Data Source \"airlines\" failed:`},
 			expectedError: "failed to get Data Source",
 		},
 

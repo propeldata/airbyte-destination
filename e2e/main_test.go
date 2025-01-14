@@ -21,8 +21,8 @@ type Config struct {
 }
 
 const (
-	overwriteDataSourceName = "_airbyte_overwrite"
-	dedupDataSourceName     = "_airbyte_dedup"
+	overwriteDataSourceName = "airbyte_overwrite"
+	dedupDataSourceName     = "airbyte_dedup"
 )
 
 var config Config
@@ -33,8 +33,7 @@ func TestMain(m *testing.M) {
 		log.Fatalf("read configuration file failed: %v", err)
 	}
 
-	err = json.Unmarshal(data, &config)
-	if err != nil {
+	if err := json.Unmarshal(data, &config); err != nil {
 		log.Fatalf("unmarshal failed: %v", err)
 	}
 
