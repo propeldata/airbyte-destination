@@ -492,6 +492,10 @@ func (d *Destination) publishBatch(ctx context.Context, dataSource *models.DataS
 }
 
 func getDataSourceUniqueName(namespace, streamName string) string {
+	if namespace == "" {
+		return streamName
+	}
+
 	return fmt.Sprintf("%s_%s", namespace, streamName)
 }
 

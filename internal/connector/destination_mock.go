@@ -125,7 +125,7 @@ func (ac *MockApiClient) FetchDataSource(_ context.Context, uniqueName string) (
 	}
 
 	switch uniqueName {
-	case "_tacos", "_airlines":
+	case "tacos", "airlines":
 		return &models.DataSource{
 			UniqueName: uniqueName,
 			ID:         "DSO1234567890",
@@ -140,7 +140,7 @@ func (ac *MockApiClient) FetchDataSource(_ context.Context, uniqueName string) (
 				},
 			},
 		}, nil
-	case "_deduped stream":
+	case "deduped stream":
 		if requestCounter > 0 {
 			return &models.DataSource{
 				UniqueName: uniqueName,
